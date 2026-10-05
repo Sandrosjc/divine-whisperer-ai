@@ -59,6 +59,7 @@ export async function resolveEngine(userId: string, plan: string): Promise<Engin
   const drafts = (settings?.draft_models ?? []).filter(Boolean).slice(0, 3);
   const refine = settings?.refine_model || "anthropic/claude-sonnet-4.5";
 
+  if (plan === "suspended") throw new EngineError("Your account is suspended.", 403);
   if (plan === "lifetime") {
     const { data: k } = await supabaseAdmin.from("user_api_keys").select("openrouter_key").eq("user_id", userId).maybeSingle();
     if (!k?.openrouter_key) throw new EngineError("NEEDS_BYOK", 402);
