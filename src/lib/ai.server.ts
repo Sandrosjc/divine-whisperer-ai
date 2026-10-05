@@ -51,7 +51,7 @@ function openrouterModel(key: string, model: string) {
 async function rotatePool(keys: string[], startIndex: number) {
   const next = (startIndex + 1) % Math.max(keys.length, 1);
   await supabaseAdmin.from("app_settings").update({ rotation_index: next }).eq("id", 1);
-  return keys.map((_, i) => keys[(startIndex + i) % keys.length]);
+  return keys.map((_, i) => keys[(startIndex + i) % keys.length] as string);
 }
 
 export async function resolveEngine(userId: string, plan: string): Promise<Engine> {
@@ -107,7 +107,7 @@ export async function streamAnswer(engine: Engine, instructions: string, message
     const lastUser = messages.filter((m) => m.role === "user").at(-1);
     const draftResults = await Promise.all(
       engine.drafts.map(async (m, i) => {
-        const key = engine.keys[i % engine.keys.length];
+        const key = engine.keys[i % engine.keys.length] as string;
         try {
           const r = streamText({ model: openrouterModel(key, m), instructions, messages, maxRetries: 0 });
           return { model: m, text: await r.text };

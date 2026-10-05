@@ -129,7 +129,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   const t = useCallback(
     (k: keyof Dict, vars?: Record<string, string | number>) =>
-      Object.entries(vars ?? {}).reduce((s, [a, b]) => s.replace(`{${a}}`, String(b)), dict[k] ?? EN[k]),
+      Object.entries(vars ?? {}).reduce((s, [a, b]) => s.replace(`{${a}}`, String(b)), (dict[k] ?? EN[k]) as string),
     [dict],
   );
 

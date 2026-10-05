@@ -130,7 +130,7 @@ export const translateUi = createServerFn({ method: "POST" })
     try {
       const parsed = JSON.parse(match?.[0] ?? "{}") as Record<string, unknown>;
       const clean: Record<string, string> = {};
-      for (const k of Object.keys(data.strings)) clean[k] = typeof parsed[k] === "string" ? (parsed[k] as string) : data.strings[k];
+      for (const k of Object.keys(data.strings)) clean[k] = typeof parsed[k] === "string" ? (parsed[k] as string) : (data.strings[k] ?? "");
       return clean;
     } catch {
       return data.strings;

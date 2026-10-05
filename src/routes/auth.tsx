@@ -33,7 +33,9 @@ function AuthPage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => data.session && navigate({ to: "/chat" }));
-    const { data } = supabase.auth.onAuthStateChange((_e, s) => s && navigate({ to: "/chat" }));
+    const { data } = supabase.auth.onAuthStateChange((_e, s) => {
+      if (s) navigate({ to: "/chat" });
+    });
     return () => data.subscription.unsubscribe();
   }, [navigate]);
 
