@@ -101,7 +101,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const saved = localStorage.getItem("chq-lang");
-    const detected = (saved || navigator.language || "en").split("-")[0].toLowerCase();
+    const detected = ((saved || navigator.language || "en").split("-")[0] ?? "en").toLowerCase();
     setLangState(detected);
   }, []);
 
