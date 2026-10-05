@@ -14,16 +14,189 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      app_settings: {
+        Row: {
+          admin_email: string | null
+          draft_models: string[]
+          id: number
+          monthly_price_usd: number
+          openrouter_keys: string[]
+          refine_model: string
+          rotation_index: number
+          updated_at: string
+        }
+        Insert: {
+          admin_email?: string | null
+          draft_models?: string[]
+          id?: number
+          monthly_price_usd?: number
+          openrouter_keys?: string[]
+          refine_model?: string
+          rotation_index?: number
+          updated_at?: string
+        }
+        Update: {
+          admin_email?: string | null
+          draft_models?: string[]
+          id?: number
+          monthly_price_usd?: number
+          openrouter_keys?: string[]
+          refine_model?: string
+          rotation_index?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      chat_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          role: string
+          summarized: boolean
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          role: string
+          summarized?: boolean
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          role?: string
+          summarized?: boolean
+          user_id?: string
+        }
+        Relationships: []
+      }
+      licenses: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          redeemed_at: string | null
+          redeemed_by: string | null
+          source: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          redeemed_at?: string | null
+          redeemed_by?: string | null
+          source?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          redeemed_at?: string | null
+          redeemed_by?: string | null
+          source?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          birth_date: string | null
+          city: string | null
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+          language: string | null
+          memory_summary: string
+          onboarded: boolean
+          plan: string
+          updated_at: string
+          welcome_message: string | null
+        }
+        Insert: {
+          birth_date?: string | null
+          city?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id: string
+          language?: string | null
+          memory_summary?: string
+          onboarded?: boolean
+          plan?: string
+          updated_at?: string
+          welcome_message?: string | null
+        }
+        Update: {
+          birth_date?: string | null
+          city?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          language?: string | null
+          memory_summary?: string
+          onboarded?: boolean
+          plan?: string
+          updated_at?: string
+          welcome_message?: string | null
+        }
+        Relationships: []
+      }
+      user_api_keys: {
+        Row: {
+          openrouter_key: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          openrouter_key: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          openrouter_key?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +323,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const
