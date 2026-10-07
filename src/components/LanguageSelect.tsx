@@ -1,27 +1,23 @@
-import { Globe2 } from "lucide-react";
 import { LANGUAGES, languageName, useI18n } from "@/lib/i18n";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+const FLAGS: Record<string, string> = { en: "🇺🇸", pt: "🇧🇷", es: "🇪🇸", fr: "🇫🇷", de: "🇩🇪", it: "🇮🇹", ja: "🇯🇵", ko: "🇰🇷", zh: "🇨🇳", ar: "🇸🇦", hi: "🇮🇳", ru: "🇷🇺", nl: "🇳🇱", tr: "🇹🇷", uk: "🇺🇦", pl: "🇵🇱" };
 
 export function LanguageSelect({ onChange }: { onChange?: (l: string) => void }) {
-  const { lang, setLang } = useI18n();
+  const { lang, setLang, t } = useI18n();
   const list = LANGUAGES.includes(lang) ? LANGUAGES : [lang, ...LANGUAGES];
   return (
-    <label className="flex items-center gap-2 text-sm text-muted-foreground">
-      <Globe2 className="h-4 w-4 text-gold" />
-      <select
-        aria-label="Language"
-        value={lang}
-        onChange={(e) => {
-          setLang(e.target.value);
-          onChange?.(e.target.value);
+    <Select value={lang} onValueChange={(value) => {
+          setLang(value);
+          onChange?.(value);
         }}
-        className="rounded-md border bg-card px-2 py-1 text-foreground"
       >
+      <SelectTrigger aria-label={t("language")} className="w-32 border-0 bg-transparent text-xs shadow-none"><SelectValue /></SelectTrigger>
+      <SelectContent>
         {list.map((c) => (
-          <option key={c} value={c}>
-            {languageName(c)}
-          </option>
+          <SelectItem key={c} value={c}>{FLAGS[c] ?? "🌐"} {languageName(c)}</SelectItem>
         ))}
-      </select>
-    </label>
+      </SelectContent>
+    </Select>
   );
 }

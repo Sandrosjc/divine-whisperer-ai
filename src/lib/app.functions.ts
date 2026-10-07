@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { onboardingSchema } from "@/lib/onboarding-schema";
 
 export const getMe = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -39,16 +40,13 @@ export const getHistory = createServerFn({ method: "GET" })
 
 export const completeOnboarding = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) =>
-    z.object({ fullName: z.string().trim().min(2).max(120), birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), city: z.string().trim().min(1).max(120), language: z.string().max(20) }).parse(d),
-  )
+  .inputValidator((d) => onboardingSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const ai = await import("@/lib/ai.server");
-    await supabaseAdmin
-      .from("profiles")
-      .update({ full_name: data.fullName, birth_date: data.birthDate, city: data.city, language: data.language })
-      .eq("id", context.userId);
+    const { data: existing, error: existingError } = await context.supabase.from("profiles").select("onboarded, welcome_message").eq("id", context.userId).single();
+    if (existingError) throw new Error("Your profile could not be loaded. Please try again.");
+    if (existing.onboarded) return { greeting: existing.welcome_message ?? `Welcome back, ${data.fullName}.` };
     const { data: profile } = await supabaseAdmin.from("profiles").select("plan").eq("id", context.userId).single();
     let engine: Awaited<ReturnType<typeof ai.resolveEngine>>;
     try {
@@ -72,8 +70,10 @@ Include:
 5. A surprising, magical insight that feels made only for them.
 6. Close by declaring: you are Chequetto, their partner for life, ready to solve any challenge with them.`,
     );
-    await supabaseAdmin.from("profiles").update({ welcome_message: greeting, onboarded: true }).eq("id", context.userId);
-    await supabaseAdmin.from("chat_messages").insert({ user_id: context.userId, role: "assistant", content: greeting });
+    const { error: saveError } = await supabaseAdmin.from("profiles").update({ full_name: data.fullName, birth_date: data.birthDate, city: data.city, language: data.language, welcome_message: greeting, onboarded: true }).eq("id", context.userId);
+    if (saveError) throw new Error("Your profile could not be saved. Please try again.");
+    const { error: messageError } = await supabaseAdmin.from("chat_messages").insert({ user_id: context.userId, role: "assistant", content: greeting });
+    if (messageError) console.error("Welcome message could not be added to history");
     return { greeting };
   });
 

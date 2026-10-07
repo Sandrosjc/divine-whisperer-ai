@@ -1,104 +1,85 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import confetti from "canvas-confetti";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { ArrowRight, Check, Loader2, LockKeyhole } from "lucide-react";
 import { completeOnboarding } from "@/lib/app.functions";
+import { onboardingSchema } from "@/lib/onboarding-schema";
 import { useI18n } from "@/lib/i18n";
 import { Logo } from "@/components/Logo";
 import { LanguageSelect } from "@/components/LanguageSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import sculpture from "@/assets/chequetto-sculpture.jpg";
 
 export const Route = createFileRoute("/_authenticated/onboarding")({
-  head: () => ({
-    meta: [
-      { title: "Welcome — Chequetto" },
-      { name: "description", content: "Introduce yourself to Chequetto, your AI partner for life." },
-      { property: "og:title", content: "Welcome — Chequetto" },
-      { property: "og:description", content: "Introduce yourself to Chequetto." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
-  }),
-  component: Onboarding,
+  head: () => ({ meta: [
+    { title: "Your beginning — Chequetto" }, { name: "description", content: "Create your personal Chequetto profile and receive a welcome made for you." },
+    { property: "og:title", content: "Your beginning — Chequetto" }, { property: "og:description", content: "Create your personal profile and meet Chequetto." },
+    { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" },
+  ] }), component: Onboarding,
 });
-
-const GOLD = ["#D4AF37", "#F5E6A8", "#FFF8DC", "#B8860B"];
-
 function celebrate() {
-  const end = Date.now() + 3500;
-  confetti({ particleCount: 160, spread: 110, origin: { y: 0.6 }, colors: GOLD });
-  confetti({ particleCount: 60, spread: 360, shapes: ["star"], scalar: 1.4, colors: GOLD, startVelocity: 35 });
-  (function frame() {
-    confetti({ particleCount: 4, angle: 60, spread: 60, origin: { x: 0 }, colors: GOLD });
-    confetti({ particleCount: 4, angle: 120, spread: 60, origin: { x: 1 }, colors: GOLD });
-    if (Date.now() < end) requestAnimationFrame(frame);
-  })();
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const gold = getComputedStyle(document.documentElement).getPropertyValue("--gold").trim();
+  confetti({ particleCount: 130, spread: 100, origin: { y: 0.6 }, colors: [gold], disableForReducedMotion: true });
 }
-
 function Onboarding() {
   const { t, lang } = useI18n();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const run = useServerFn(completeOnboarding);
   const [form, setForm] = useState({ fullName: "", birthDate: "", city: "" });
   const [busy, setBusy] = useState(false);
   const [greeting, setGreeting] = useState<string | null>(null);
-
+  const [error, setError] = useState("");
+  const progress = Object.values(form).filter(v => v.trim()).length;
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
+    if (busy) return;
+    const parsed = onboardingSchema.safeParse({ ...form, language: lang });
+    if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Check your details."); return; }
+    setError(""); setBusy(true);
     try {
-      const r = await run({ data: { ...form, language: lang } });
-      setGreeting(r.greeting);
-      celebrate();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setBusy(false);
-    }
+      const result = await run({ data: parsed.data });
+      await qc.invalidateQueries({ queryKey: ["me"] });
+      setGreeting(result.greeting); celebrate();
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Your profile could not be completed. Please try again."); }
+    finally { setBusy(false); }
   }
-
-  if (greeting) {
-    return (
-      <main className="relative min-h-screen overflow-hidden px-4 py-16">
-        <div className="pointer-events-none absolute inset-0 animate-pulse bg-[radial-gradient(circle_at_50%_20%,var(--gold)_0%,transparent_45%)] opacity-20" />
-        <article className="relative mx-auto max-w-2xl rounded-2xl border bg-card/90 p-8 shadow-glow backdrop-blur animate-in fade-in zoom-in-95 duration-700 md:p-12">
-          <div className="mb-6 flex justify-center"><Logo size={56} /></div>
-          <div className="prose-chq text-[1.05rem]"><ReactMarkdown>{greeting}</ReactMarkdown></div>
-          <Button size="lg" className="mt-8 w-full shadow-glow" onClick={() => navigate({ to: "/chat" })}>{t("continueChat")}</Button>
-        </article>
-      </main>
-    );
-  }
-
+  if (greeting) return (
+    <main className="mx-auto min-h-screen max-w-3xl px-6 py-12 md:py-16">
+      <div className="mb-8 flex items-center justify-between"><Logo size={42} /><LanguageSelect /></div>
+      <p className="flex items-center gap-2 text-sm text-sage"><Check size={17} />{t("profileReady")}</p>
+      <h1 className="mt-5 text-5xl font-semibold">{t("welcome", { name: form.fullName.split(" ")[0] ?? "" })}</h1>
+      <p className="mt-3 text-sm text-muted-foreground">{t("completionSub")}</p>
+      <article className="prose-chq mt-8 border-y py-6"><ReactMarkdown>{greeting}</ReactMarkdown></article>
+      <p className="mt-4 text-xs leading-6 text-muted-foreground">{t("symbolicNote")}</p>
+      <Button size="lg" className="mt-8 gap-3" onClick={() => navigate({ to: "/dashboard", replace: true })}>{t("continueChat")}<ArrowRight size={17} /></Button>
+    </main>
+  );
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
-      <form onSubmit={submit} className="w-full max-w-md rounded-2xl border bg-card p-8 shadow-glow">
-        <div className="mb-4 flex justify-between"><Logo size={44} /><LanguageSelect /></div>
-        <h1 className="text-gold-gradient text-4xl font-semibold">{t("onbTitle")}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{t("onbSub")}</p>
-        <div className="mt-6 space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="n">{t("fullName")}</Label>
-            <Input id="n" required minLength={2} value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
+    <main className="onboarding-layout">
+      <section className="onboarding-art"><img src={sculpture} alt="Golden sculptural loop" width={1536} height={1024} /><div className="onboarding-art-shade absolute inset-0" /><div className="absolute bottom-16 start-12 end-12"><Logo size={46} /><h2 className="mt-6 max-w-md text-5xl leading-tight">{t("personalSpace")}</h2><p className="mt-5 max-w-sm text-sm leading-7 text-muted-foreground">{t("tagline")}</p></div></section>
+      <section className="flex flex-col px-6 py-8 md:px-12"><header className="flex items-center justify-between"><span className="font-display text-2xl">Chequetto</span><LanguageSelect /></header>
+        <form onSubmit={submit} className="mx-auto my-auto w-full max-w-md py-12">
+          <div className="mb-8 flex items-center gap-3 text-xs"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground">1</span><span>{t("detailsStep")}</span><div className="h-px flex-1 bg-border" /><span className="flex h-6 w-6 items-center justify-center rounded-full border text-muted-foreground">2</span><span className="text-muted-foreground">{t("welcomeStep")}</span></div>
+          <h1 className="text-4xl font-semibold">{t("onbTitle")}</h1><p className="mt-3 text-sm leading-6 text-muted-foreground">{t("onbSub")}</p>
+          <div className="mt-8 space-y-5">
+            <div className="space-y-2"><Label htmlFor="full-name">{t("fullName")}</Label><Input id="full-name" autoComplete="name" required minLength={2} maxLength={120} placeholder={t("namePlaceholder")} disabled={busy} value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} className="h-12" /></div>
+            <div className="space-y-2"><Label htmlFor="birth-date">{t("birthDate")}</Label><Input id="birth-date" type="date" required min="1900-01-01" max={new Date().toISOString().slice(0, 10)} disabled={busy} value={form.birthDate} onChange={e => setForm({ ...form, birthDate: e.target.value })} className="h-12" /></div>
+            <div className="space-y-2"><Label htmlFor="city">{t("city")}</Label><Input id="city" autoComplete="address-level2" required maxLength={120} placeholder={t("cityPlaceholder")} disabled={busy} value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} className="h-12" /></div>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="b">{t("birthDate")}</Label>
-            <Input id="b" type="date" required value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="c">{t("city")}</Label>
-            <Input id="c" required value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
-          </div>
-        </div>
-        <Button type="submit" size="lg" className="mt-8 w-full" disabled={busy}>
-          {busy ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t("reading")}</>) : t("awaken")}
-        </Button>
-      </form>
+          <p className="mt-5 text-end text-xs text-muted-foreground">{progress} / 3</p>
+          {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
+          <Button type="submit" size="lg" className="mt-5 h-12 w-full gap-2" disabled={busy}>{busy ? <><Loader2 size={17} className="animate-spin" />{t("reading")}</> : <>{t("awaken")}<ArrowRight size={17} /></>}</Button>
+          <p className="mt-5 flex gap-2 text-xs leading-6 text-muted-foreground"><LockKeyhole size={14} className="mt-1 shrink-0" />{t("privacyNote")}</p>
+        </form>
+      </section>
     </main>
   );
 }

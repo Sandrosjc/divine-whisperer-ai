@@ -103,7 +103,7 @@ function Panel() {
 
       <Tabs defaultValue="licenses">
         <TabsList>
-          <TabsTrigger value="licenses">AppSumo licenses</TabsTrigger>
+          <TabsTrigger value="licenses">Lifetime licenses</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="keys">Key pool</TabsTrigger>
           <TabsTrigger value="system">System</TabsTrigger>
@@ -187,7 +187,7 @@ function Panel() {
 
         <TabsContent value="system" className="space-y-4 pt-4">
           <div className="space-y-4 rounded-xl border bg-card p-5">
-            <div className="space-y-1.5"><Label htmlFor="ae">Admin email (only this account can open the sanctum)</Label><Input id="ae" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+            <div className="space-y-1.5"><Label htmlFor="ae">Owner contact email (access is controlled by administrator roles)</Label><Input id="ae" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
             <div className="space-y-1.5"><Label htmlFor="dm">Draft models (OpenRouter IDs, one per line, max 3)</Label>
               <textarea id="dm" className="h-24 w-full rounded-md border bg-background p-2 font-mono text-sm" value={drafts} onChange={(e) => setDrafts(e.target.value)} /></div>
             <div className="space-y-1.5"><Label htmlFor="rm">Refinement model</Label><Input id="rm" value={refine} onChange={(e) => setRefine(e.target.value)} /></div>

@@ -32,9 +32,9 @@ function AuthPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => data.session && navigate({ to: "/chat" }));
+    supabase.auth.getSession().then(({ data }) => data.session && navigate({ to: "/dashboard" }));
     const { data } = supabase.auth.onAuthStateChange((_e, s) => {
-      if (s) navigate({ to: "/chat" });
+      if (s) navigate({ to: "/dashboard" });
     });
     return () => data.subscription.unsubscribe();
   }, [navigate]);
@@ -44,7 +44,7 @@ function AuthPage() {
     setBusy(true);
     const res =
       mode === "up"
-        ? await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin + "/chat" } })
+        ? await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin + "/auth" } })
         : await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
     if (res.error) {
