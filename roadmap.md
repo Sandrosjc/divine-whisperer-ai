@@ -10,5 +10,10 @@
 - [x] Hidden admin panel (/sanctum) + 30-key rotation pool
 - [x] AppSumo license redemption (only monetization path at launch)
 - [x] Admin: generate/track AppSumo license keys
+- [ ] Build a friendly dashboard and a truthful, personalized account-completion flow
+- [ ] Add the A administration entry and neutral license branding
+- [ ] Improve language selection with flags and persist the chosen language
+- [ ] Verify dashboard, onboarding validation and navigation
+- [ ] PayPal payments, token top-ups and automatic license email — blocked by payment credentials, package prices and verified sending domain
+- [ ] Multimedia and omnichannel services — blocked by the complete technology inventory and service connections
 - [ ] End-to-end test with a real account (sign up → onboarding → chat → redeem)
-- Deprioritized: Stripe monthly subscription (not in this version)
