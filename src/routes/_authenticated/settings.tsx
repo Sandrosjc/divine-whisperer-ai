@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ArrowLeft } from "lucide-react";
@@ -27,7 +27,7 @@ export const Route = createFileRoute("/_authenticated/settings")({
 
 function Section({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border bg-card p-6">
+    <section className="border-b py-6">
       <h2 className="text-2xl font-semibold">{title}</h2>
       {sub && <p className="mt-1 text-sm text-muted-foreground">{sub}</p>}
       <div className="mt-4">{children}</div>
@@ -38,6 +38,7 @@ function Section({ title, sub, children }: { title: string; sub?: string; childr
 function SettingsPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const me = useQuery({ queryKey: ["me"], queryFn: useServerFn(getMe) });
   const redeem = useServerFn(redeemLicense);
   const saveKey = useServerFn(saveByokKey);
@@ -93,7 +94,7 @@ function SettingsPage() {
         <LanguageSelect onChange={(l) => saveLang({ data: { language: l } })} />
       </Section>
 
-      <Button variant="outline" onClick={async () => { await supabase.auth.signOut(); navigate({ to: "/" }); }}>{t("signOut")}</Button>
+      <Button variant="outline" onClick={async () => { await queryClient.cancelQueries(); queryClient.clear(); await supabase.auth.signOut(); navigate({ to: "/auth", replace: true }); }}>{t("signOut")}</Button>
     </main>
   );
 }

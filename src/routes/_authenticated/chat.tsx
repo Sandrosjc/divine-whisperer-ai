@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { Mic, MicOff, Send, Settings, Volume2, VolumeX, Shield } from "lucide-react";
+import { Mic, MicOff, Send, Settings, Volume2, VolumeX, LayoutDashboard } from "lucide-react";
 import { toast } from "sonner";
 import { getHistory, getMe } from "@/lib/app.functions";
 import { supabase } from "@/integrations/supabase/client";
@@ -64,6 +64,10 @@ function Chat() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs]);
+  useEffect(() => {
+    const draft = sessionStorage.getItem("chq-prompt");
+    if (draft) { setInput(draft); sessionStorage.removeItem("chq-prompt"); }
+  }, []);
   useEffect(() => {
     taRef.current?.focus();
   }, [busy]);
@@ -136,9 +140,8 @@ function Chat() {
           <Button variant="ghost" size="icon" aria-label={voice ? t("voiceOn") : t("voiceOff")} onClick={() => { setVoice(!voice); window.speechSynthesis?.cancel(); }}>
             {voice ? <Volume2 className="h-4 w-4 text-gold" /> : <VolumeX className="h-4 w-4" />}
           </Button>
-          {p?.isAdmin && (
-            <Button variant="ghost" size="icon" asChild aria-label="Admin"><Link to="/sanctum"><Shield className="h-4 w-4" /></Link></Button>
-          )}
+          <Button variant="ghost" size="icon" asChild aria-label={t("dashboard")}><Link to="/dashboard"><LayoutDashboard className="h-4 w-4" /></Link></Button>
+          <Button variant="ghost" size="icon" asChild aria-label={t("adminAccess")} title={t("adminAccess")}><Link to="/admin-access">A</Link></Button>
           <Button variant="ghost" size="icon" asChild aria-label={t("settings")}><Link to="/settings"><Settings className="h-4 w-4" /></Link></Button>
         </div>
       </header>
