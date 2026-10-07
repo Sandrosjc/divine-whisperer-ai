@@ -7,22 +7,12 @@ async function assertAdmin(context: { supabase: any; userId: string }) {
   if (!data) throw new Error("Forbidden");
 }
 
-/** The first account to open the secret path (matching the admin email if one is set) becomes owner. */
+/** Access is granted only through an existing server-verified administrator role. */
 export const claimOwner = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: isAdmin } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "admin" });
-    if (isAdmin) return { admin: true };
-    const { count } = await supabaseAdmin.from("user_roles").select("id", { count: "exact", head: true }).eq("role", "admin");
-    const { data: settings } = await supabaseAdmin.from("app_settings").select("admin_email").eq("id", 1).single();
-    const email = (context.claims as { email?: string }).email?.toLowerCase();
-    const matches = !!settings?.admin_email && settings.admin_email.toLowerCase() === email;
-    const firstClaim = (count ?? 0) === 0 && !settings?.admin_email;
-    if (!matches && !firstClaim) return { admin: false };
-    await supabaseAdmin.from("user_roles").insert({ user_id: context.userId, role: "admin" });
-    if (!settings?.admin_email && email) await supabaseAdmin.from("app_settings").update({ admin_email: email }).eq("id", 1);
-    return { admin: true };
+    return { admin: !!isAdmin };
   });
 
 export const getAdminData = createServerFn({ method: "GET" })
