@@ -172,6 +172,16 @@ function Panel() {
 
         <TabsContent value="keys" className="space-y-4 pt-4">
           <p className="text-sm text-muted-foreground">Up to 30 OpenRouter keys, rotated round-robin for trial users. If none are set or all fail, Chequetto uses the built-in AI. Saved keys are never shown again — leave a slot empty to keep it.</p>
+          <div className="space-y-2 rounded-xl border bg-card p-4">
+            <Label htmlFor="bulk">Paste all keys at once (one per line, comma or space separated)</Label>
+            <textarea id="bulk" className="h-32 w-full rounded-md border bg-background p-2 font-mono text-sm" placeholder="sk-or-...&#10;sk-or-..."
+              onPaste={(e) => {
+                e.preventDefault();
+                const keys = e.clipboardData.getData("text").split(/[\s,;]+/).map((k) => k.trim()).filter(Boolean).slice(0, 30);
+                setPool(Array.from({ length: 30 }, (_, i) => (keys[i] ? { value: keys[i], keep: false } : { value: "", keep: false })));
+                toast.success(`${keys.length} keys loaded — click Save key pool`);
+              }} />
+          </div>
           <div className="grid gap-2 sm:grid-cols-2">
             {pool.map((k, i) => (
               <div key={i} className="flex items-center gap-2">
