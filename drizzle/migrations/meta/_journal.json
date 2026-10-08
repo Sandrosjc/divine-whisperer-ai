@@ -8,6 +8,13 @@
       "when": 1791461453420,
       "tag": "0000_owner_admin_grant",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791461865608,
+      "tag": "0001_owner_admin_email_fix",
+      "breakpoints": true
     }
   ]
 }
