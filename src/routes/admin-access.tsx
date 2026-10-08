@@ -26,14 +26,16 @@ function AdminAccess() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   async function verify(signIn: boolean) {
     if (busy) return;
-    setBusy(true); setError("");
+    setBusy(true); setError(""); setInfo("");
     try {
       if (signIn) {
-        const values = z.object({ email: z.string().trim().email().max(255), password: z.string().min(6).max(128) }).parse({ email, password });
-        const { error: signInError } = await supabase.auth.signInWithPassword(values);
-        if (signInError) throw new Error(signInError.message);
+        const parsed = z.object({ email: z.string().trim().email().max(255), password: z.string().min(6).max(128) }).safeParse({ email, password });
+        if (!parsed.success) { setError(t("wrongPassword")); return; }
+        const { error: signInError } = await supabase.auth.signInWithPassword(parsed.data);
+        if (signInError) { setError(t("wrongPassword")); return; }
       }
       const result = await check();
       if (!result.admin) { setError(t("adminDenied")); return; }
@@ -41,5 +43,14 @@ function AdminAccess() {
     } catch { setError(t("adminDenied")); }
     finally { setBusy(false); setPassword(""); }
   }
-  return <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6 py-12"><Logo size={46} /><div className="mt-8 flex items-center gap-2 text-gold"><LockKeyhole size={18} /><span className="text-xs">Chequetto · A</span></div><h1 className="mt-4 text-4xl">{t("adminAccess")}</h1><p className="mt-4 text-sm leading-6 text-muted-foreground">{t("adminSignIn")}</p><form onSubmit={e => { e.preventDefault(); verify(true); }} className="mt-8 space-y-5"><div className="space-y-2"><Label htmlFor="admin-email">{t("email")}</Label><Input id="admin-email" type="email" autoComplete="username" maxLength={255} required value={email} onChange={e => setEmail(e.target.value)} /></div><div className="space-y-2"><Label htmlFor="admin-password">{t("password")}</Label><Input id="admin-password" type="password" autoComplete="current-password" minLength={6} maxLength={128} required value={password} onChange={e => setPassword(e.target.value)} /></div>{error && <p role="alert" className="text-sm text-destructive">{error}</p>}<Button className="w-full" disabled={busy}>{t("signIn")}</Button></form><Button variant="outline" className="mt-3" disabled={busy} onClick={() => verify(false)}>{t("openChat")} · A</Button><Button asChild variant="ghost" className="mt-6 justify-start px-0"><Link to="/"><ArrowLeft size={16} />{t("dashboard")}</Link></Button></main>;
+  async function forgot() {
+    setError(""); setInfo("");
+    const parsed = z.string().trim().email().max(255).safeParse(email);
+    if (!parsed.success) { setError(t("enterEmailFirst")); return; }
+    setBusy(true);
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(parsed.data, { redirectTo: `${window.location.origin}/reset-password` });
+    setBusy(false);
+    if (resetError) setError(resetError.message); else setInfo(t("resetSent"));
+  }
+  return <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6 py-12"><Logo size={46} /><div className="mt-8 flex items-center gap-2 text-gold"><LockKeyhole size={18} /><span className="text-xs">Chequetto · A</span></div><h1 className="mt-4 text-4xl">{t("adminAccess")}</h1><p className="mt-4 text-sm leading-6 text-muted-foreground">{t("adminSignIn")}</p><form onSubmit={e => { e.preventDefault(); verify(true); }} className="mt-8 space-y-5"><div className="space-y-2"><Label htmlFor="admin-email">{t("email")}</Label><Input id="admin-email" type="email" autoComplete="username" maxLength={255} required value={email} onChange={e => setEmail(e.target.value)} /></div><div className="space-y-2"><Label htmlFor="admin-password">{t("password")}</Label><Input id="admin-password" type="password" autoComplete="current-password" minLength={6} maxLength={128} required value={password} onChange={e => setPassword(e.target.value)} /></div>{error && <p role="alert" className="text-sm text-destructive">{error}</p>}{info && <p role="status" className="text-sm text-gold">{info}</p>}<Button className="w-full" disabled={busy}>{t("signIn")}</Button></form><button type="button" disabled={busy} onClick={forgot} className="mt-3 text-sm text-muted-foreground underline-offset-4 hover:text-gold hover:underline">{t("forgotPassword")}</button><Button variant="outline" className="mt-3" disabled={busy} onClick={() => verify(false)}>{t("openChat")} · A</Button><Button asChild variant="ghost" className="mt-6 justify-start px-0"><Link to="/"><ArrowLeft size={16} />{t("dashboard")}</Link></Button></main>;
 }
