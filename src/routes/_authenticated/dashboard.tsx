@@ -22,5 +22,5 @@ function Dashboard() {
   useEffect(() => { if (me.data && !me.data.profile?.onboarded) navigate({ to: "/onboarding" }); }, [me.data, navigate]);
   if (me.isError) return <main className="flex min-h-screen flex-col items-center justify-center gap-4"><p>Your workspace could not be loaded.</p><Button onClick={() => me.refetch()}>Try again</Button></main>;
   if (!me.data?.profile?.onboarded) return <div className="flex min-h-screen items-center justify-center"><span className="animate-pulse text-muted-foreground">Chequetto…</span></div>;
-  return <Workspace signedIn profile={me.data.profile} history={history.data} used={me.data.used} trialLimit={me.data.trialLimit} />;
+  return <Workspace signedIn profile={me.data.profile} history={history.data ?? []} used={me.data.used} trialLimit={me.data.trialLimit} />;
 }
