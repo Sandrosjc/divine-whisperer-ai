@@ -33,11 +33,11 @@ function ResetPassword() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const parsed = z.string().min(6).max(128).safeParse(password);
-    if (!parsed.success) return toast.error(t("wrongPassword"));
+    if (!parsed.success) { toast.error(t("wrongPassword")); return; }
     setBusy(true);
     const { error } = await supabase.auth.updateUser({ password: parsed.data });
     setBusy(false);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success(t("passwordUpdated"));
     navigate({ to: "/admin-access", replace: true });
   }
