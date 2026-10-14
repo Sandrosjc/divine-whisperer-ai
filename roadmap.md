@@ -18,3 +18,5 @@
 - [ ] Multimedia and omnichannel services — blocked by the complete technology inventory and service connections
 - [ ] End-to-end test with a real account (sign up → onboarding → chat → redeem)
 - [x] Remove the A button; owner console opens from Settings for verified owners
+- [x] Name-first welcome for visitors, offline warm conversation, daily gratitude pill, share button
+- [ ] Help/FAQ center, guided tour and automatic emails — emails blocked by a verified sending domain
