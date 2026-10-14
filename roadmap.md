@@ -17,3 +17,4 @@
 - [ ] PayPal payments, token top-ups and automatic license email — blocked by payment credentials, package prices and verified sending domain
 - [ ] Multimedia and omnichannel services — blocked by the complete technology inventory and service connections
 - [ ] End-to-end test with a real account (sign up → onboarding → chat → redeem)
+- [x] Remove the A button; owner console opens from Settings for verified owners

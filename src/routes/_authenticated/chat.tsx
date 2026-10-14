@@ -141,7 +141,6 @@ function Chat() {
             {voice ? <Volume2 className="h-4 w-4 text-gold" /> : <VolumeX className="h-4 w-4" />}
           </Button>
           <Button variant="ghost" size="icon" asChild aria-label={t("dashboard")}><Link to="/dashboard"><LayoutDashboard className="h-4 w-4" /></Link></Button>
-          <Button variant="ghost" size="icon" asChild aria-label={t("adminAccess")} title={t("adminAccess")}><Link to="/admin-access">A</Link></Button>
           <Button variant="ghost" size="icon" asChild aria-label={t("settings")}><Link to="/settings"><Settings className="h-4 w-4" /></Link></Button>
         </div>
       </header>
