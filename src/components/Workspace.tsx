@@ -48,7 +48,7 @@ export function Workspace({ profile, history = [], used = 0, trialLimit = 25, si
         </div>
         <div className="mt-auto border-t pt-5">
           {signedIn && profile?.plan === "trial" && <div className="mb-5 px-2"><div className="flex justify-between text-xs"><span className="text-muted-foreground">{t("trial")}</span><span>{Math.max(0, trialLimit - used)} / {trialLimit}</span></div><progress className="usage-progress mt-3 w-full" max={trialLimit} value={Math.max(0, trialLimit - used)} /><Button asChild variant="link" className="mt-1 h-8 px-0 text-xs"><Link to="/settings">{t("activate")}<ArrowUpRight size={12} /></Link></Button></div>}
-          <div className="flex items-center gap-3 px-2"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-sm text-gold">{name ? name[0]?.toUpperCase() : <Logo size={24} />}</span><div className="min-w-0 flex-1"><p className="truncate text-sm">{name || "Chequetto"}</p><p className="text-xs text-muted-foreground">{signedIn ? t("member") : t("tagline").split(".")[0]}</p></div><Button asChild variant="ghost" size="icon" title={t("adminAccess")} aria-label={t("adminAccess")} className="h-8 w-8 font-display text-lg"><Link to="/admin-access">A</Link></Button></div>
+          <div className="flex items-center gap-3 px-2"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-sm text-gold">{name ? name[0]?.toUpperCase() : <Logo size={24} />}</span><div className="min-w-0 flex-1"><p className="truncate text-sm">{name || "Chequetto"}</p><p className="text-xs text-muted-foreground">{signedIn ? t("member") : t("tagline").split(".")[0]}</p></div></div>
         </div>
       </aside>
       <main className="workspace-main">

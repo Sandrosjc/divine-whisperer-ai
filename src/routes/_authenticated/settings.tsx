@@ -94,6 +94,12 @@ function SettingsPage() {
         <LanguageSelect onChange={(l) => saveLang({ data: { language: l } })} />
       </Section>
 
+      {me.data?.isAdmin && (
+        <Section title="Owner console" sub="Platform key pool, members, usage and lifetime licenses.">
+          <Button asChild><Link to="/sanctum">Open owner console</Link></Button>
+        </Section>
+      )}
+
       <Button variant="outline" onClick={async () => { await queryClient.cancelQueries(); queryClient.clear(); await supabase.auth.signOut(); navigate({ to: "/auth", replace: true }); }}>{t("signOut")}</Button>
     </main>
   );
