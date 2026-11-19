@@ -6,10 +6,18 @@
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
+// Render (and any plain Node host) needs a Node server build instead of the
+// Cloudflare bundle. The Lovable sandbox build always overrides this to
+// cloudflare-module, so the preview and the published Lovable app are untouched.
+const nodePreset =
+  process.env["CHEQUETTO_PRESET"] ||
+  (process.env["RENDER"] === "true" ? "node-server" : undefined);
+
 export default defineConfig({
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  nitro: nodePreset ? { preset: nodePreset } : {},
 });
