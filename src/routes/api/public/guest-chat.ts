@@ -2,8 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 const Body = z.object({
-  name: z.string().trim().min(2).max(40),
-  age: z.number().int().min(5).max(120),
+  name: z.string().trim().max(40).optional().default(""),
+  age: z.number().int().min(5).max(120).optional(),
   lang: z.enum(["en", "pt", "es"]),
   messages: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(2000) })).max(12),
 });
@@ -23,8 +23,8 @@ export const Route = createFileRoute("/api/public/guest-chat")({
         const { name, age, lang, messages } = parsed.data;
         if (messages.filter((m) => m.role === "user").length > 5) return json(402, { error: "LIMIT" });
 
-        const system = `You are Chequetto — a wise, warm, elegant companion. Speak in ${LANG[lang]} unless the user writes in another language. The person is ${name}, ${age} years old; adapt vocabulary and references to that age with respect. Be concise (max 120 words), accurate, practical and kind. You are an AI, not a therapist; if someone mentions self-harm, gently urge them to contact local emergency services or a crisis line.${messages.length ? "" : " This is the very first moment: write a short, moving, cinematic welcome (max 60 words) using their name, then ask one gentle question about what brings them here."}`;
-        const history = messages.length ? messages : [{ role: "user" as const, content: `Hi, I'm ${name}.` }];
+        const system = `You are Chequetto — a wise, warm, elegant companion. Speak in ${LANG[lang]} unless the user writes in another language. ${name ? `The person is ${name}${age ? `, ${age} years old; adapt vocabulary to that age with respect` : ""}.` : "You do not know the person's name yet."} Be concise (max 120 words), accurate, practical and kind. You are an AI, not a therapist; if someone mentions self-harm, gently urge them to contact local emergency services or a crisis line.${messages.filter((m) => m.role === "user").length > 1 ? "" : " This is the very first moment: write a short, moving, cinematic welcome (max 60 words) introducing yourself as Chequetto, respond warmly to what they wrote, and gently ask their name if unknown."}`;
+        const history = messages.length ? messages : [{ role: "user" as const, content: name ? `Hi, I'm ${name}.` : "Hi." }];
 
         const { poolComplete } = await import("@/lib/provider-pool.server");
         const r = await poolComplete([{ role: "system", content: system }, ...history]);
