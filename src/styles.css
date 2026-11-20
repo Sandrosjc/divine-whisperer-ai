@@ -138,3 +138,10 @@
 .prose-chq code { background: var(--muted); padding: 0.1em 0.35em; border-radius: 4px; }
 .prose-chq pre { background: var(--muted); padding: 0.8em; border-radius: 8px; overflow-x: auto; }
 .prose-chq a { color: var(--gold); text-decoration: underline; }
+@keyframes fade-out { to { opacity: 0; } }
+@keyframes cosmic-name {
+  0% { opacity: 0; transform: translateY(-50%) scale(0.6); letter-spacing: 0.6em; filter: blur(12px); }
+  30% { opacity: 1; transform: translateY(-50%) scale(1.05); letter-spacing: 0.08em; filter: blur(0); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-50%) scale(1.15); }
+}

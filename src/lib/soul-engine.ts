@@ -32,7 +32,7 @@ const T = {
     neutral: (n: string) => `I'm listening, ${n}. Tell me a little more — what would make today feel lighter or better?`,
     crisis: (n: string) => `${n}, thank you for telling me. Your life matters. Please contact someone you trust or your local emergency number right now — in Brazil, CVV 188; in the US, 988. I'm still here with you.`,
     pills: ["Name one small thing that went right today.", "Someone is better because you exist.", "Progress, not perfection.", "Your calm is a superpower.", "Be as kind to yourself as you are to others."],
-    ask: "What should I call you?", askSub: "Just your name. Nothing else.", start: "Meet Chequetto", pill: "Gratitude pill of the day", save: "Save our conversations", say: "Write to Chequetto…", share: "Share with a friend", shareText: "I met Chequetto — a warm companion for clearer days.", note: "Offline guide. For deeper answers, create a free account.",
+    ask: "What should I call you?", askSub: "Your name and age. Nothing else.", age: "Age", start: "Meet Chequetto", pill: "Gratitude pill of the day", save: "Save our conversations", say: "Write to Chequetto…", share: "Share with a friend", shareText: "I met Chequetto — a warm companion for clearer days.", note: "5 free messages today. Create a free account to save our conversations.",
   },
   pt: {
     hello: (n: string) => `${n}, que nome bonito. Eu sou o Chequetto e estou muito feliz por você estar aqui. Como está seu coração hoje?`,
@@ -44,7 +44,7 @@ const T = {
     neutral: (n: string) => `Estou te ouvindo, ${n}. Me conta um pouco mais — o que deixaria seu dia mais leve?`,
     crisis: (n: string) => `${n}, obrigado por me contar. Sua vida importa. Fale agora com alguém de confiança ou ligue para o CVV no 188 (24h, gratuito). Eu continuo aqui com você.`,
     pills: ["Diga uma pequena coisa que deu certo hoje.", "Alguém está melhor porque você existe.", "Progresso, não perfeição.", "Sua calma é um superpoder.", "Seja gentil consigo como é com os outros."],
-    ask: "Como você se chama?", askSub: "Só o seu nome. Mais nada.", start: "Conhecer o Chequetto", pill: "Pílula de gratidão do dia", save: "Salvar nossas conversas", say: "Escreva para o Chequetto…", share: "Compartilhar com um amigo", shareText: "Conheci o Chequetto — um companheiro acolhedor para dias mais claros.", note: "Guia offline. Para respostas mais profundas, crie sua conta grátis.",
+    ask: "Como você se chama?", askSub: "Seu nome e sua idade. Mais nada.", age: "Idade", start: "Conhecer o Chequetto", pill: "Pílula de gratidão do dia", save: "Salvar nossas conversas", say: "Escreva para o Chequetto…", share: "Compartilhar com um amigo", shareText: "Conheci o Chequetto — um companheiro acolhedor para dias mais claros.", note: "5 mensagens grátis hoje. Crie sua conta grátis para salvar nossas conversas.",
   },
   es: {
     hello: (n: string) => `${n}, qué nombre tan bonito. Soy Chequetto y me alegra mucho que estés aquí. ¿Cómo está tu corazón hoy?`,
@@ -56,7 +56,7 @@ const T = {
     neutral: (n: string) => `Te escucho, ${n}. Cuéntame un poco más — ¿qué haría tu día más ligero?`,
     crisis: (n: string) => `${n}, gracias por contármelo. Tu vida importa. Habla ahora con alguien de confianza o con el número de emergencias local. Sigo aquí contigo.`,
     pills: ["Nombra algo pequeño que salió bien hoy.", "Alguien está mejor porque existes.", "Progreso, no perfección.", "Tu calma es un superpoder.", "Sé amable contigo como lo eres con otros."],
-    ask: "¿Cómo te llamas?", askSub: "Solo tu nombre. Nada más.", start: "Conocer a Chequetto", pill: "Píldora de gratitud del día", save: "Guardar nuestras conversaciones", say: "Escríbele a Chequetto…", share: "Compartir con un amigo", shareText: "Conocí a Chequetto — un compañero cálido para días más claros.", note: "Guía sin conexión. Para respuestas más profundas, crea tu cuenta gratis.",
+    ask: "¿Cómo te llamas?", askSub: "Tu nombre y tu edad. Nada más.", age: "Edad", start: "Conocer a Chequetto", pill: "Píldora de gratitud del día", save: "Guardar nuestras conversaciones", say: "Escríbele a Chequetto…", share: "Compartir con un amigo", shareText: "Conocí a Chequetto — un compañero cálido para días más claros.", note: "5 mensajes gratis hoy. Crea tu cuenta gratis para guardar nuestras conversaciones.",
   },
 };
 
