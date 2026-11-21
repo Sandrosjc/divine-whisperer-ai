@@ -27,7 +27,11 @@ export const Route = createFileRoute("/api/public/guest-chat")({
         const history = messages.length ? messages : [{ role: "user" as const, content: name ? `Hi, I'm ${name}.` : "Hi." }];
 
         const { poolComplete } = await import("@/lib/provider-pool.server");
-        const r = await poolComplete([{ role: "system", content: system }, ...history]);
+        const { publicContext } = await import("@/lib/public-knowledge.server");
+        const lastUser = [...history].reverse().find((m) => m.role === "user")?.content ?? "";
+        const ref = await publicContext(lastUser, lang);
+        const sys = ref ? `${system}\nUse this free public reference only if relevant: ${ref}` : system;
+        const r = await poolComplete([{ role: "system", content: sys }, ...history]);
         if (r) return json(200, { text: r.text, engine: r.provider });
 
         // No pool keys here (e.g. Lovable preview) → built-in AI

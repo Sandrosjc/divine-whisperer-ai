@@ -26,7 +26,13 @@ export function FirstContact() {
   const [ready, setReady] = useState(false);
   const end = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setLang(pickLang()); setReady(true); }, []);
+  useEffect(() => {
+    const saved = localStorage.getItem("chq-lang");
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+    const geo = /Sao_Paulo|Fortaleza|Recife|Bahia|Manaus|Belem|Cuiaba|Lisbon|Luanda|Maputo/.test(tz) ? "pt" : /Madrid|Mexico|Bogota|Lima|Santiago|Buenos_Aires|Caracas|Montevideo|Asuncion|La_Paz|Guayaquil/.test(tz) ? "es" : undefined;
+    setLang(saved === "pt" || saved === "es" || saved === "en" ? saved : pickLang(geo)); setReady(true);
+  }, []);
+  function chooseLang(l: Lang) { setLang(l); localStorage.setItem("chq-lang", l); }
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
   const t = soulText(lang);
@@ -69,7 +75,7 @@ export function FirstContact() {
       {burst && <CosmicBurst name="Chequetto" onDone={() => setBurst(false)} />}
       <header className="flex items-center justify-between py-4">
         <span className="flex items-center gap-2"><Logo size={30} /><span className="font-display text-2xl">Chequetto</span></span>
-        <div className="flex gap-2"><Button variant="ghost" size="icon" aria-label={t.share} onClick={share}><Share2 size={18} /></Button><Button asChild size="sm"><Link to="/auth">{t.save}</Link></Button></div>
+        <div className="flex items-center gap-1">{(["en", "pt", "es"] as Lang[]).map((l) => <button key={l} type="button" onClick={() => chooseLang(l)} aria-label={l.toUpperCase()} aria-pressed={lang === l} className={`rounded-md px-1.5 py-1 text-lg transition ${lang === l ? "bg-secondary ring-1 ring-gold" : "opacity-60 hover:opacity-100"}`}>{l === "en" ? "🇺🇸" : l === "pt" ? "🇧🇷" : "🇪🇸"}</button>)}<Button variant="ghost" size="icon" aria-label={t.share} onClick={share}><Share2 size={18} /></Button><Button asChild size="sm"><Link to="/auth">{t.save}</Link></Button></div>
       </header>
       <div className="rounded-lg border border-gold/40 bg-card p-4"><p className="flex items-center gap-2 text-xs text-gold"><Sparkles size={14} />{t.pill}</p><p className="mt-2 text-sm">{dailyPill(lang)}</p></div>
       <div className="flex-1 space-y-4 py-6">
