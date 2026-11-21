@@ -15,6 +15,13 @@
       "when": 1791461865608,
       "tag": "0001_owner_admin_email_fix",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795251055716,
+      "tag": "0002_guest_daily_usage",
+      "breakpoints": true
     }
   ]
 }

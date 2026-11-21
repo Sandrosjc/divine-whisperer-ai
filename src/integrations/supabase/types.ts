@@ -74,6 +74,24 @@ export type Database = {
         }
         Relationships: []
       }
+      guest_usage: {
+        Row: {
+          count: number
+          day: string
+          fp: string
+        }
+        Insert: {
+          count?: number
+          day?: string
+          fp: string
+        }
+        Update: {
+          count?: number
+          day?: string
+          fp?: string
+        }
+        Relationships: []
+      }
       licenses: {
         Row: {
           code: string
@@ -187,6 +205,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      consume_guest_message: {
+        Args: { _fp: string; _limit?: number }
+        Returns: number
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
