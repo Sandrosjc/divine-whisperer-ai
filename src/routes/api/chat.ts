@@ -54,11 +54,20 @@ export const Route = createFileRoute("/api/chat")({
         }));
 
         try {
-          const { publicContext } = await import("@/lib/public-knowledge.server");
+          const [{ publicContext }, { firecrawlContext }] = await Promise.all([
+            import("@/lib/public-knowledge.server"),
+            import("@/lib/firecrawl.server"),
+          ]);
           const lg = parsed.data.language.slice(0, 2);
-          const ref = await publicContext(parsed.data.message, lg === "pt" || lg === "es" ? lg : "en");
+          const [ref, webRef] = await Promise.all([
+            publicContext(parsed.data.message, lg === "pt" || lg === "es" ? lg : "en"),
+            firecrawlContext(parsed.data.message),
+          ]);
           const base = ai.persona(profile, parsed.data.language);
-          const instructions = ref ? `${base}\n\nFree public facts (use only if relevant, cite the source briefly):\n${ref}` : base;
+          const context = [ref, webRef].filter(Boolean).join("\n\n");
+          const instructions = context
+            ? `${base}\n\nPublic facts and web search results (use only if relevant; cite source URLs briefly):\n${context}`
+            : base;
           return await ai.streamAnswer(engine, instructions, messages, async (text) => {
             const { error } = await supabaseAdmin.from("chat_messages").insert({ user_id: userId, role: "assistant", content: text });
             if (error) console.error("save assistant failed", error);
