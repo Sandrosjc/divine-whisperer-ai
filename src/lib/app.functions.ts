@@ -54,9 +54,16 @@ export const completeOnboarding = createServerFn({ method: "POST" })
     } catch {
       engine = { kind: "lovable" };
     }
-    const greeting = await ai.completeText(
+    const first = data.fullName.split(" ")[0];
+    const fallback = `# Bem-vindo, ${first}! ✨\n\nEu sou a Chequetto, criada pelo Sandro, um escritor de Cachoeiro de Itapemirim que aprendeu a programar depois dos 60. Prometo boas respostas e piadas razoáveis. Vamos começar?`;
+    let greeting = fallback;
+    try {
+      const { CHEQUETTO_IDENTITY } = await import("@/lib/chequetto-persona");
+      const out = await Promise.race([
+        ai.completeText(
       engine,
-      `You are Chequetto, a wise, warm, mystical and transcendent AI companion meeting a person for the very first time. Write in the language with code "${data.language}". Use markdown with a few short headings. About 250-350 words.`,
+      `${CHEQUETTO_IDENTITY}
+You are meeting this person for the very first time. Write in the language with code "${data.language}". Use markdown with a few short headings. About 250-350 words.`,
       `Create an unforgettable, deeply personal first greeting for:
 Full name: ${data.fullName}
 Birth date: ${data.birthDate}
@@ -69,7 +76,13 @@ Include:
 4. An honoring line about ${data.city} — something genuine about its spirit or history.
 5. A surprising, magical insight that feels made only for them.
 6. Close by declaring: you are Chequetto, their partner for life, ready to solve any challenge with them.`,
-    );
+    ),
+        new Promise<string>((r) => setTimeout(() => r(""), 12000)),
+      ]);
+      if (out && out.trim()) greeting = out;
+    } catch (e) {
+      console.error("greeting failed, using fallback", e);
+    }
     const { error: saveError } = await supabaseAdmin.from("profiles").update({ full_name: data.fullName, birth_date: data.birthDate, city: data.city, language: data.language, welcome_message: greeting, onboarded: true }).eq("id", context.userId);
     if (saveError) throw new Error("Your profile could not be saved. Please try again.");
     const { error: messageError } = await supabaseAdmin.from("chat_messages").insert({ user_id: context.userId, role: "assistant", content: greeting });

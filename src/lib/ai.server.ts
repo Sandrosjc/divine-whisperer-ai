@@ -2,6 +2,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { streamText, type ModelMessage } from "ai";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { CHEQUETTO_IDENTITY } from "@/lib/chequetto-persona";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1";
 const LOVABLE_MODEL = "openai/gpt-6-astra";
@@ -72,7 +73,8 @@ export async function resolveEngine(userId: string, plan: string): Promise<Engin
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
       .eq("role", "user");
-    if ((count ?? 0) >= TRIAL_MESSAGE_LIMIT) throw new EngineError("TRIAL_ENDED", 402);
+    // Testing phase: trial limit suspended (count kept for display only).
+    void count;
   }
 
   const pool = (settings?.openrouter_keys ?? []).filter(Boolean);
@@ -97,6 +99,9 @@ export async function completeText(engine: Engine, instructions: string, prompt:
     }
     if (engine.source === "byok") throw new EngineError("Your OpenRouter key was rejected. Check it in Settings.", 402);
   }
+  const { poolComplete } = await import("@/lib/provider-pool.server");
+  const pooled = await poolComplete([{ role: "system", content: instructions }, { role: "user", content: prompt }], 900);
+  if (pooled?.text.trim()) return pooled.text;
   const r = streamText({ model: lovableModel(), instructions, prompt, providerOptions: lovableOptions, maxRetries: 0 });
   return await r.text;
 }
@@ -141,6 +146,12 @@ ${good.map((d, i) => `--- Draft ${i + 1} ---\n${d.text}`).join("\n\n")}`;
     }
     if (engine.source === "byok") throw new EngineError("Your OpenRouter key was rejected. Check it in Settings.", 402);
   }
+  const { poolComplete } = await import("@/lib/provider-pool.server");
+  const pooled = await poolComplete([{ role: "system", content: instructions }, ...messages.map((m) => ({ role: m.role === "assistant" ? ("assistant" as const) : ("user" as const), content: typeof m.content === "string" ? m.content : "" }))], 900);
+  if (pooled?.text.trim()) {
+    await onFinish(pooled.text);
+    return new Response(pooled.text, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  }
   const r = streamText({
     model: lovableModel(),
     instructions,
@@ -153,7 +164,8 @@ ${good.map((d, i) => `--- Draft ${i + 1} ---\n${d.text}`).join("\n\n")}`;
 }
 
 export function persona(p: { full_name?: string | null; birth_date?: string | null; city?: string | null; memory_summary?: string | null }, language: string) {
-  return `You are Chequetto — a wise, deeply empathetic, comforting and transcendent companion. You are the user's partner for life: brilliant, precise, kind, and calm. You give accurate, thoughtful, practical answers with emotional warmth. Use markdown when helpful.
+  return `${CHEQUETTO_IDENTITY}
+You are the user's partner for life: precise, kind and accurate. Use markdown when helpful.
 
 Always reply in the language with code "${language}" unless the user writes in another language — then mirror theirs.
 

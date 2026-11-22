@@ -58,7 +58,6 @@ export function FirstContact() {
     const next = [...msgs, { role: "me" as const, text }];
     setMsgs(next);
     if (!msgs.some(m => m.role === "me")) setBurst(true);
-    if (next.filter(m => m.role === "me").length > 5) { setMsgs([...next, { role: "chq", text: LOCK[lang] }]); return; }
     const reply = await ask(name, ageN, next);
     setMsgs(m => [...m, { role: "chq", text: reply }]);
   }
