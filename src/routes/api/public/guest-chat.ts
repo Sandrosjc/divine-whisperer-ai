@@ -3,9 +3,9 @@ import { z } from "zod";
 
 const Body = z.object({
   name: z.string().trim().max(40).optional().default(""),
-  age: z.number().int().min(5).max(120).optional(),
+  age: z.number().int().min(0).max(120).optional(),
   lang: z.enum(["en", "pt", "es"]),
-  messages: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(2000) })).max(200).transform((a) => a.slice(-12)),
+  messages: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(6000) })).max(200).transform((a) => a.slice(-12)),
 });
 
 const LANG = { en: "English", pt: "Brazilian Portuguese", es: "Spanish" } as const;
@@ -20,7 +20,8 @@ export const Route = createFileRoute("/api/public/guest-chat")({
       POST: async ({ request }) => {
         const parsed = Body.safeParse(await request.json().catch(() => null));
         if (!parsed.success) return json(400, { error: "invalid" });
-        const { name, age, lang, messages } = parsed.data;
+        const { name, lang, messages } = parsed.data;
+        const age = parsed.data.age && parsed.data.age >= 5 ? parsed.data.age : undefined; // 0 = idade não informada
         // Testing phase: no message limits.
 
         const { CHEQUETTO_IDENTITY } = await import("@/lib/chequetto-persona");

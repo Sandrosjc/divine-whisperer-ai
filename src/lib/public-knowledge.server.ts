@@ -56,7 +56,8 @@ async function weather(q: string, lang: Lang) {
 }
 
 async function books(q: string) {
-  const m = q.match(/(?:livro|livros|book|books|libro|libros|autor|author|escritor)\s+(.{3,60})/i); if (!m?.[1]) return "";
+  // Só quando pedem livros "de/sobre" algo ou um autor; "meu livro" numa conversa comum não dispara busca.
+  const m = q.match(/(?:livros?|books?|libros?)\s+(?:de|do|da|sobre|about|by|of)\s+(.{3,60})/i) ?? q.match(/(?:autor|author|escritor)\s+(?:de|do|da|of)?\s*(.{3,60})/i); if (!m?.[1]) return "";
   const j = await get<{ docs?: { title: string; author_name?: string[]; first_publish_year?: number }[] }>(`https://openlibrary.org/search.json?limit=3&fields=title,author_name,first_publish_year&q=${encodeURIComponent(m[1])}`);
   const d = j?.docs ?? []; if (!d.length) return "";
   return "Open Library: " + d.map((b) => `"${b.title}" by ${b.author_name?.[0] ?? "?"} (${b.first_publish_year ?? "?"})`).join("; ");
@@ -99,6 +100,8 @@ export async function publicContext(text: string, lang: Lang): Promise<string> {
   const q = text.replace(/[?!¿¡]/g, " ").trim();
   const parts = await Promise.all([currency(q), cep(q), cnpj(q), weather(q, lang), books(q), country(q), holidays(q), dictionary(q), arxiv(q)].map((p) => p.catch(() => "")));
   const facts = parts.filter(Boolean);
-  if (!facts.length) { const w = await wikipedia(q.replace(/\./g, ""), lang); if (w) facts.push(w); }
+  // Wikipédia só para perguntas de fato ("quem foi", "o que é"...), não para toda conversa: poupa tempo e tokens.
+  const FACT_Q = /\b(quem (é|foi|era|são)|o que (é|são|foi)|what (is|are|was)|who (is|was)|qu[eé] (es|son)|qui[eé]n (es|fue)|quando (foi|nasceu|morreu)|onde (fica|nasceu)|capital d|hist[oó]ria d|significado d|meaning of)\b/i;
+  if (!facts.length && FACT_Q.test(q)) { const w = await wikipedia(q.replace(/\./g, ""), lang); if (w) facts.push(w); }
   return facts.join("\n").slice(0, 1800);
 }

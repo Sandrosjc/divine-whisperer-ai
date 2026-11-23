@@ -57,6 +57,7 @@ export const Route = createFileRoute("/api/chat")({
           role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
           content: m.content,
         }));
+        while (messages[0]?.role === "assistant") messages.shift(); // a janela de 16 pode começar por "assistant"; muitos provedores recusam
 
         try {
           const [{ publicContext }, { firecrawlContext }] = await Promise.all([

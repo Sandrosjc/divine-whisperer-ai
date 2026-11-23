@@ -131,14 +131,22 @@ export const redeemLicense = createServerFn({ method: "POST" })
   });
 
 export const translateUi = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ language: z.string().max(20), strings: z.record(z.string(), z.string()) }).parse(d))
+  .inputValidator((d) => z.object({ language: z.string().max(20), strings: z.record(z.string().max(80), z.string().max(400)).refine((o) => Object.keys(o).length <= 400, "too many") }).parse(d))
   .handler(async ({ data }) => {
     const ai = await import("@/lib/ai.server");
-    const out = await ai.completeText(
-      { kind: "lovable" },
-      "You translate app interface strings. Return ONLY a JSON object with the same keys and translated values. Keep the brand name Chequetto unchanged. Keep {placeholders} unchanged.",
-      `Translate to the language with code "${data.language}". Return JSON:\n${JSON.stringify(data.strings)}`,
-    );
+    let out = "";
+    try {
+      out = await ai.completeText(
+        { kind: "lovable" },
+        "You translate app interface strings. Return ONLY a JSON object with the same keys and translated values. Keep the brand name Chequetto unchanged. Keep {placeholders} unchanged.",
+        `Translate to the language with code "${data.language}". Return JSON:\n${JSON.stringify(data.strings)}`,
+        undefined,
+        { maxTokens: 4000 },
+      );
+    } catch (e) {
+      console.error("translateUi unavailable", e instanceof Error ? e.message : e);
+      return data.strings; // sem IA disponível: mantém o texto original em vez de dar erro 500
+    }
     const match = out.match(/\{[\s\S]*\}/);
     try {
       const parsed = JSON.parse(match?.[0] ?? "{}") as Record<string, unknown>;

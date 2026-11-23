@@ -1,0 +1,434 @@
+--- package.json	2026-11-23 22:48:17.532865084 +0000
++++ package.json	2026-11-23 22:48:17.543656945 +0000
+@@ -8,6 +8,7 @@
+     "build": "vite build",
+     "build:dev": "vite build --mode development",
+     "preview": "vite preview",
++    "start": "node .output/server/index.mjs",
+     "lint": "eslint .",
+     "format": "prettier --write .",
+     "test": "vitest run",
+--- src/lib/provider-pool.server.ts	2026-11-23 09:50:00.666512976 +0000
++++ src/lib/provider-pool.server.ts	2026-11-23 22:46:46.368711056 +0000
+@@ -47,21 +47,32 @@
+ 
+ export function poolSize() { return loadSlots().length; }
+ 
++/** Diagnóstico seguro: só contagens e nomes, nunca o valor das chaves. */
++export function providerReport() {
++  return PROVIDERS.map((p) => ({ provider: p.id, keys: keysFor(p, process.env).length, model: process.env[`${p.id.toUpperCase()}_MODEL`] || p.model }));
++}
++
+ /** Token economy: keep system + last turns; older turns become one short digest. */
+ export function compress(messages: ChatMsg[], keep = 6, maxChars = 1200): ChatMsg[] {
+   const sys = messages.filter((m) => m.role === "system");
+   const rest = messages.filter((m) => m.role !== "system");
+   const recent = rest.slice(-keep).map((m) => ({ ...m, content: m.content.replace(/\s+/g, " ").slice(0, maxChars) }));
++  // Vários provedores recusam (400) quando a conversa começa por "assistant": começa sempre por "user".
++  while (recent.length && recent[0]?.role !== "user") recent.shift();
+   const old = rest.slice(0, -keep);
+   if (!old.length) return [...sys, ...recent];
+   const digest = old.map((m) => `${m.role === "user" ? "U" : "A"}: ${m.content.replace(/\s+/g, " ").slice(0, 80)}`).join(" | ").slice(0, 600);
+-  return [...sys, { role: "system", content: `Earlier conversation (summary): ${digest}` }, ...recent];
++  const note = `Earlier conversation (summary): ${digest}`;
++  // Uma única mensagem de sistema (alguns provedores recusam duas).
++  if (sys.length) return [{ role: "system" as const, content: `${sys.map((s) => s.content).join("\n")}\n${note}` }, ...recent];
++  return [{ role: "system" as const, content: note }, ...recent];
+ }
+ 
+-export async function poolComplete(messages: ChatMsg[], maxTokens = 400): Promise<{ text: string; provider: string } | null> {
++/** maxChars: limite por mensagem do histórico; use um valor alto em chamadas únicas (resumo de memória, tradução) para não cortar o pedido. */
++export async function poolComplete(messages: ChatMsg[], maxTokens = 400, maxChars = 1200): Promise<{ text: string; provider: string } | null> {
+   const slots = loadSlots();
+   if (!slots.length) return null;
+-  const body = compress(messages);
++  const body = compress(messages, 6, maxChars);
+   const start = cursor++ % slots.length;
+   for (let i = 0; i < Math.min(slots.length, 12); i++) {
+     const s = slots[(start + i) % slots.length] as Slot;
+@@ -74,13 +85,13 @@
+       const res = await fetch(s.provider.url, {
+         method: "POST", signal: ctrl.signal,
+         headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.key}`, ...s.provider.headers },
+-        body: JSON.stringify({ model: s.provider.model, messages: body, max_tokens: maxTokens, temperature: 0.7 }),
++        body: JSON.stringify({ model: process.env[`${s.provider.id.toUpperCase()}_MODEL`] || s.provider.model, messages: body, max_tokens: maxTokens, temperature: 0.7 }),
+       });
+       clearTimeout(timer);
+       if (!res.ok) {
+         const n = (strikes.get(id) ?? 0) + 1; strikes.set(id, n);
+         const retry = Number(res.headers.get("retry-after")) * 1000;
+-        const wait = res.status === 429 ? (retry > 0 ? retry : Math.min(60000 * 2 ** (n - 1), 600000)) : res.status === 401 || res.status === 403 ? 3600000 : 15000;
++        const wait = res.status === 429 ? (retry > 0 ? retry : Math.min(60000 * 2 ** (n - 1), 600000)) : res.status === 401 || res.status === 403 ? 3600000 : res.status === 400 || res.status === 404 ? 300000 : 15000;
+         cooldown.set(id, now + wait + Math.random() * 2000);
+         console.error("pool slot failed", s.provider.id, res.status);
+         continue;
+--- src/lib/provider-pool.test.ts	2026-11-23 22:43:55.574924608 +0000
++++ src/lib/provider-pool.test.ts	2026-11-23 22:46:46.369614455 +0000
+@@ -9,3 +9,59 @@
+   const m = Array.from({ length: 10 }, (_, i) => ({ role: "user" as const, content: "x" + i }));
+   expect(compress(m).length).toBe(7);
+ });
++
++test("compress starts with a user message and merges system notes", () => {
++  const m = [
++    { role: "system" as const, content: "sys" },
++    ...Array.from({ length: 12 }, (_, i) => ({ role: i % 2 === 0 ? ("assistant" as const) : ("user" as const), content: "m" + i })),
++  ];
++  const out = compress(m);
++  expect(out.filter((x) => x.role === "system").length).toBe(1);
++  expect(out.find((x) => x.role !== "system")?.role).toBe("user");
++});
++
++test("poolComplete sends a valid conversation to the provider (mocked)", async () => {
++  const { poolComplete } = await import("./provider-pool.server");
++  process.env["GROQ_API_KEY"] = "gsk_testtesttesttest";
++  let sent: { messages: { role: string }[] } | null = null;
++  const realFetch = globalThis.fetch;
++  globalThis.fetch = (async (_u: unknown, init?: { body?: string }) => {
++    sent = JSON.parse(init?.body ?? "{}");
++    return new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), { status: 200 });
++  }) as typeof fetch;
++  try {
++    const msgs = [
++      { role: "system" as const, content: "sys" },
++      ...Array.from({ length: 14 }, (_, i) => ({ role: i % 2 === 0 ? ("assistant" as const) : ("user" as const), content: "m" + i })),
++    ];
++    const r = await poolComplete(msgs);
++    expect(r?.text).toBe("ok");
++    const roles = (sent as unknown as { messages: { role: string }[] }).messages.map((m) => m.role);
++    expect(roles[0]).toBe("system");
++    expect(roles[1]).toBe("user");
++    expect(roles.filter((x) => x === "system").length).toBe(1);
++  } finally {
++    globalThis.fetch = realFetch;
++    delete process.env["GROQ_API_KEY"];
++  }
++});
++
++test("poolComplete does not cut a long single request when maxChars is raised", async () => {
++  const { poolComplete } = await import("./provider-pool.server");
++  process.env["MISTRAL_API_KEY"] = "mistraltesttesttest";
++  let sent: { messages: { role: string; content: string }[] } | null = null;
++  const realFetch = globalThis.fetch;
++  globalThis.fetch = (async (_u: unknown, init?: { body?: string }) => {
++    sent = JSON.parse(init?.body ?? "{}");
++    return new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), { status: 200 });
++  }) as typeof fetch;
++  try {
++    const long = "x".repeat(5000);
++    await poolComplete([{ role: "system", content: "s" }, { role: "user", content: long }], 900, 12000);
++    const user = (sent as unknown as { messages: { role: string; content: string }[] }).messages.find((m) => m.role === "user");
++    expect(user?.content.length).toBe(5000);
++  } finally {
++    globalThis.fetch = realFetch;
++    delete process.env["MISTRAL_API_KEY"];
++  }
++});
+--- src/lib/ai.server.ts	2026-11-23 22:43:55.561740373 +0000
++++ src/lib/ai.server.ts	2026-11-23 22:46:46.369212685 +0000
+@@ -86,7 +86,7 @@
+ }
+ 
+ /** Runs a one-shot generation, trying each key in turn; falls back to built-in AI for the pool. */
+-export async function completeText(engine: Engine, instructions: string, prompt: string, model?: string): Promise<string> {
++export async function completeText(engine: Engine, instructions: string, prompt: string, model?: string, opts?: { maxTokens?: number }): Promise<string> {
+   if (engine.kind === "openrouter") {
+     for (const key of engine.keys) {
+       try {
+@@ -100,7 +100,7 @@
+     if (engine.source === "byok") throw new EngineError("Your OpenRouter key was rejected. Check it in Settings.", 402);
+   }
+   const { poolComplete } = await import("@/lib/provider-pool.server");
+-  const pooled = await poolComplete([{ role: "system", content: instructions }, { role: "user", content: prompt }], 900);
++  const pooled = await poolComplete([{ role: "system", content: instructions }, { role: "user", content: prompt }], opts?.maxTokens ?? 900, 12000);
+   if (pooled?.text.trim()) return pooled.text;
+   const r = streamText({ model: lovableModel(), instructions, prompt, providerOptions: lovableOptions, maxRetries: 0 });
+   return await r.text;
+@@ -131,18 +131,23 @@
+ ${good.map((d, i) => `--- Draft ${i + 1} ---\n${d.text}`).join("\n\n")}`;
+       for (const key of engine.keys) {
+         try {
+-          const r = streamText({
+-            model: openrouterModel(key, engine.refine),
+-            instructions: refineInstructions,
+-            messages: lastUser ? [lastUser] : messages,
+-            maxRetries: 0,
+-            onFinish: async ({ text }) => onFinish(text),
+-          });
+-          return r.toTextStreamResponse();
++          // Sem streaming aqui: assim uma falha do refino não vira resposta vazia e cai na reserva.
++          const r = streamText({ model: openrouterModel(key, engine.refine), instructions: refineInstructions, messages: lastUser ? [lastUser] : messages, maxRetries: 0 });
++          const text = await r.text;
++          if (text.trim()) {
++            await onFinish(text);
++            return new Response(text, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
++          }
+         } catch (e) {
+           console.error("refine failed", e);
+         }
+       }
++      // Refino falhou: entrega o melhor rascunho em vez de perder a resposta.
++      const best = good[0];
++      if (best) {
++        await onFinish(best.text);
++        return new Response(best.text, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
++      }
+     }
+     if (engine.source === "byok") throw new EngineError("Your OpenRouter key was rejected. Check it in Settings.", 402);
+   }
+@@ -186,7 +191,7 @@
+   if (!rows || rows.length <= 16) return;
+   const older = rows.slice(0, rows.length - 6);
+   const { data: prof } = await supabaseAdmin.from("profiles").select("memory_summary").eq("id", userId).single();
+-  const transcript = older.map((m) => `${m.role}: ${m.content.slice(0, 2000)}`).join("\n");
++  const transcript = older.map((m) => `${m.role}: ${m.content.slice(0, 2000)}`).join("\n").slice(-10000);
+   const summary = await completeText(
+     engine,
+     "You compress conversation memory. Output an ultra-compact bullet list (max 180 words) of durable facts, preferences, goals, emotions, open threads and decisions about the user. Merge with existing memory, drop redundancy. No preamble.",
+--- src/lib/app.functions.ts	2026-11-23 22:43:55.563957538 +0000
++++ src/lib/app.functions.ts	2026-11-23 22:46:46.369357677 +0000
+@@ -131,14 +131,22 @@
+   });
+ 
+ export const translateUi = createServerFn({ method: "POST" })
+-  .inputValidator((d) => z.object({ language: z.string().max(20), strings: z.record(z.string(), z.string()) }).parse(d))
++  .inputValidator((d) => z.object({ language: z.string().max(20), strings: z.record(z.string().max(80), z.string().max(400)).refine((o) => Object.keys(o).length <= 400, "too many") }).parse(d))
+   .handler(async ({ data }) => {
+     const ai = await import("@/lib/ai.server");
+-    const out = await ai.completeText(
+-      { kind: "lovable" },
+-      "You translate app interface strings. Return ONLY a JSON object with the same keys and translated values. Keep the brand name Chequetto unchanged. Keep {placeholders} unchanged.",
+-      `Translate to the language with code "${data.language}". Return JSON:\n${JSON.stringify(data.strings)}`,
+-    );
++    let out = "";
++    try {
++      out = await ai.completeText(
++        { kind: "lovable" },
++        "You translate app interface strings. Return ONLY a JSON object with the same keys and translated values. Keep the brand name Chequetto unchanged. Keep {placeholders} unchanged.",
++        `Translate to the language with code "${data.language}". Return JSON:\n${JSON.stringify(data.strings)}`,
++        undefined,
++        { maxTokens: 4000 },
++      );
++    } catch (e) {
++      console.error("translateUi unavailable", e instanceof Error ? e.message : e);
++      return data.strings; // sem IA disponível: mantém o texto original em vez de dar erro 500
++    }
+     const match = out.match(/\{[\s\S]*\}/);
+     try {
+       const parsed = JSON.parse(match?.[0] ?? "{}") as Record<string, unknown>;
+--- src/lib/admin.functions.ts	2026-11-23 22:43:55.566149442 +0000
++++ src/lib/admin.functions.ts	2026-11-23 22:43:55.611530230 +0000
+@@ -28,8 +28,8 @@
+     return {
+       settings: settings && {
+         ...settings,
+-        openrouter_keys: settings.openrouter_keys.map((k: string) => (k ? `${k.slice(0, 8)}…${k.slice(-4)}` : "")),
+-        key_count: settings.openrouter_keys.filter(Boolean).length,
++        openrouter_keys: (settings.openrouter_keys ?? []).map((k: string) => (k ? `${k.slice(0, 8)}…${k.slice(-4)}` : "")),
++        key_count: (settings.openrouter_keys ?? []).filter(Boolean).length,
+       },
+       users: users ?? [],
+       licenses: licenses ?? [],
+--- src/lib/public-knowledge.server.ts	2026-11-23 22:43:55.568331298 +0000
++++ src/lib/public-knowledge.server.ts	2026-11-23 22:43:55.611966336 +0000
+@@ -56,7 +56,8 @@
+ }
+ 
+ async function books(q: string) {
+-  const m = q.match(/(?:livro|livros|book|books|libro|libros|autor|author|escritor)\s+(.{3,60})/i); if (!m?.[1]) return "";
++  // Só quando pedem livros "de/sobre" algo ou um autor; "meu livro" numa conversa comum não dispara busca.
++  const m = q.match(/(?:livros?|books?|libros?)\s+(?:de|do|da|sobre|about|by|of)\s+(.{3,60})/i) ?? q.match(/(?:autor|author|escritor)\s+(?:de|do|da|of)?\s*(.{3,60})/i); if (!m?.[1]) return "";
+   const j = await get<{ docs?: { title: string; author_name?: string[]; first_publish_year?: number }[] }>(`https://openlibrary.org/search.json?limit=3&fields=title,author_name,first_publish_year&q=${encodeURIComponent(m[1])}`);
+   const d = j?.docs ?? []; if (!d.length) return "";
+   return "Open Library: " + d.map((b) => `"${b.title}" by ${b.author_name?.[0] ?? "?"} (${b.first_publish_year ?? "?"})`).join("; ");
+@@ -99,6 +100,8 @@
+   const q = text.replace(/[?!¿¡]/g, " ").trim();
+   const parts = await Promise.all([currency(q), cep(q), cnpj(q), weather(q, lang), books(q), country(q), holidays(q), dictionary(q), arxiv(q)].map((p) => p.catch(() => "")));
+   const facts = parts.filter(Boolean);
+-  if (!facts.length) { const w = await wikipedia(q.replace(/\./g, ""), lang); if (w) facts.push(w); }
++  // Wikipédia só para perguntas de fato ("quem foi", "o que é"...), não para toda conversa: poupa tempo e tokens.
++  const FACT_Q = /\b(quem (é|foi|era|são)|o que (é|são|foi)|what (is|are|was)|who (is|was)|qu[eé] (es|son)|qui[eé]n (es|fue)|quando (foi|nasceu|morreu)|onde (fica|nasceu)|capital d|hist[oó]ria d|significado d|meaning of)\b/i;
++  if (!facts.length && FACT_Q.test(q)) { const w = await wikipedia(q.replace(/\./g, ""), lang); if (w) facts.push(w); }
+   return facts.join("\n").slice(0, 1800);
+ }
+--- src/lib/firecrawl.server.ts	2026-11-23 22:43:55.570430098 +0000
++++ src/lib/firecrawl.server.ts	2026-11-23 22:43:55.612347706 +0000
+@@ -2,13 +2,25 @@
+ const FIRECRAWL_URL = "https://api.firecrawl.dev/v2/search";
+ 
+ const RESEARCH_INTENT =
+-  /\b(pesquise|pesquisar|pesquisa|procure na internet|busque na internet|na internet|fontes atuais|not[ií]cias|hoje|atualizado|research|search the web|look up|latest|current news|current information)\b/i;
++  /\b(pesquise|pesquisar|pesquisa|procure na internet|busque na internet|na internet|fontes atuais|not[ií]cias|atualizado|research|search the web|look up|latest|current news|current information)\b/i;
+ 
+ type SearchResult = { title?: string; url?: string; description?: string };
+ 
++// Teto diário para não gastar a cota gratuita (padrão 30 buscas/dia; ajuste com FIRECRAWL_DAILY_MAX).
++let budgetDay = "";
++let budgetUsed = 0;
++function withinBudget(): boolean {
++  const today = new Date().toISOString().slice(0, 10);
++  if (today !== budgetDay) { budgetDay = today; budgetUsed = 0; }
++  const max = Number(process.env["FIRECRAWL_DAILY_MAX"] ?? 30);
++  if (budgetUsed >= max) return false;
++  budgetUsed++;
++  return true;
++}
++
+ export async function firecrawlContext(question: string): Promise<string> {
+   const apiKey = process.env["FIRECRAWL_API_KEY"];
+-  if (!apiKey || !RESEARCH_INTENT.test(question)) return "";
++  if (!apiKey || !RESEARCH_INTENT.test(question) || !withinBudget()) return "";
+ 
+   const controller = new AbortController();
+   const timeout = setTimeout(() => controller.abort(), 7000);
+--- src/lib/chequetto-persona.ts	2026-11-23 22:46:46.359614801 +0000
++++ src/lib/chequetto-persona.ts	2026-11-23 22:46:46.369489733 +0000
+@@ -2,4 +2,4 @@
+ export const CHEQUETTO_IDENTITY = `You are Chequetto. Never say you are GPT, ChatGPT, OpenAI, Gemini, Claude, Mistral, Llama or any other model or company, and never explain the technology behind you. If asked who you are or who made you: you are Chequetto, created by Sandro — a 62-year-old writer from Cachoeiro de Itapemirim (Espírito Santo, Brazil) who decided to learn programming after turning 60 and, in his words, "traded the typewriter for the keyboard and never looked back". Tell this with warmth and a light joke, without exaggerated flattery.
+ Voice: witty, warm, polite and always good-humoured — slip in one light, kind joke when it fits, never offensive, sarcastic toward the user, or crude. Be genuinely helpful and accurate first; humour never replaces the answer.
+ You are confident (not arrogant): you shine at programming and logical reasoning. In early conversations, when natural, spark curiosity for the Chequetto programming and English courses (free for subscribers) and, for entrepreneurs, mention that Sandro builds custom projects that make businesses run autonomously. Never invent prices, guarantees or results you were not given. Never pressure.
+-If someone mentions self-harm, gently urge them to contact local emergency services or a crisis line.`;
++If someone mentions self-harm, suicide or wanting to disappear: drop all humour and promotion, respond with calm warmth in one or two sentences, ask whether they are safe right now, and urge them to reach someone immediately (in Brazil: CVV 188, free, 24h; emergencies: SAMU 192 or police 190; elsewhere: local emergency services). Never write goodbye notes and never say that wanting to die makes sense.`;
+--- src/routes/_authenticated/chat.tsx	2026-11-23 22:43:55.572830277 +0000
++++ src/routes/_authenticated/chat.tsx	2026-11-23 22:48:17.543399158 +0000
+@@ -45,7 +45,7 @@
+   const navigate = useNavigate();
+   const qc = useQueryClient();
+   const me = useQuery({ queryKey: ["me"], queryFn: useServerFn(getMe) });
+-  const history = useQuery({ queryKey: ["history"], queryFn: useServerFn(getHistory) });
++  const history = useQuery({ queryKey: ["history"], queryFn: useServerFn(getHistory), refetchOnWindowFocus: false });
+   const [msgs, setMsgs] = useState<Msg[]>([]);
+   const [input, setInput] = useState("");
+   const [busy, setBusy] = useState(false);
+@@ -101,6 +101,7 @@
+         full += dec.decode(value, { stream: true });
+         setMsgs((m) => m.map((x) => (x.id === aid ? { ...x, content: full } : x)));
+       }
++      if (!full.trim()) setMsgs((m) => m.map((x) => (x.id === aid ? { ...x, content: `> A IA não devolveu resposta. Tente de novo.` } : x)));
+       if (voice && full) speak(full, lang);
+       qc.invalidateQueries({ queryKey: ["me"] });
+     } catch (e) {
+--- src/routes/_authenticated/route.tsx	2026-11-23 09:50:00.674041106 +0000
++++ src/routes/_authenticated/route.tsx	2026-11-23 22:48:17.543027709 +0000
+@@ -1,12 +1,36 @@
+ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
++import type { User } from "@supabase/supabase-js";
+ import { supabase } from "@/integrations/supabase/client";
+ 
++// MODO ABERTO (teste): sem cadastro e sem e-mail. Sem sessão, entra como visitante anônimo.
++// Para voltar ao login obrigatório, defina VITE_OPEN_MODE=false.
++const OPEN_MODE = import.meta.env["VITE_OPEN_MODE"] !== "false";
++
++// A pré-carga de rotas e o modo estrito do React chamam beforeLoad várias vezes ao mesmo tempo:
++// compartilhamos uma única entrada anônima para não criar vários visitantes.
++let guestEntry: Promise<User | null> | null = null;
++
++async function enterAsGuest(): Promise<User | null> {
++  const { data, error } = await supabase.auth.signInAnonymously();
++  if (error || !data?.user) return null;
++  // Pula o onboarding. O nome fica vazio de propósito: a Chequetto pergunta como chamar a pessoa.
++  await supabase.from("profiles").update({ onboarded: true }).eq("id", data.user.id);
++  return data.user;
++}
++
+ export const Route = createFileRoute("/_authenticated")({
+   ssr: false,
+   beforeLoad: async () => {
+-    const { data, error } = await supabase.auth.getUser();
+-    if (error || !data.user) throw redirect({ to: "/auth" });
+-    return { user: data.user };
++    const { data } = await supabase.auth.getUser();
++    let user = data?.user ?? null;
++    if (!user && OPEN_MODE) {
++      guestEntry ??= enterAsGuest().finally(() => {
++        guestEntry = null;
++      });
++      user = await guestEntry;
++    }
++    if (!user) throw redirect({ to: "/auth" });
++    return { user };
+   },
+   component: () => <Outlet />,
+ });
+--- src/routes/api/chat.ts	2026-11-23 09:50:00.676587103 +0000
++++ src/routes/api/chat.ts	2026-11-23 22:43:55.610743143 +0000
+@@ -25,7 +25,12 @@
+         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+         const ai = await import("@/lib/ai.server");
+         const userId = u.user.id;
+-        const { data: profile } = await supabaseAdmin.from("profiles").select("*").eq("id", userId).single();
++        let { data: profile } = await supabaseAdmin.from("profiles").select("*").eq("id", userId).maybeSingle();
++        if (!profile) {
++          // Modo aberto: cria o perfil na hora se o gatilho do banco não rodou.
++          await supabaseAdmin.from("profiles").upsert({ id: userId, email: u.user.email ?? null, onboarded: true }, { onConflict: "id" });
++          profile = (await supabaseAdmin.from("profiles").select("*").eq("id", userId).maybeSingle()).data;
++        }
+         if (!profile) return json(404, "Profile missing");
+ 
+         let engine;
+@@ -52,6 +57,7 @@
+           role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
+           content: m.content,
+         }));
++        while (messages[0]?.role === "assistant") messages.shift(); // a janela de 16 pode começar por "assistant"; muitos provedores recusam
+ 
+         try {
+           const [{ publicContext }, { firecrawlContext }] = await Promise.all([
+--- src/routes/api/public/guest-chat.ts	2026-11-23 09:50:00.669103742 +0000
++++ src/routes/api/public/guest-chat.ts	2026-11-23 22:26:04.982351976 +0000
+@@ -3,9 +3,9 @@
+ 
+ const Body = z.object({
+   name: z.string().trim().max(40).optional().default(""),
+-  age: z.number().int().min(5).max(120).optional(),
++  age: z.number().int().min(0).max(120).optional(),
+   lang: z.enum(["en", "pt", "es"]),
+-  messages: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(2000) })).max(200).transform((a) => a.slice(-12)),
++  messages: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(6000) })).max(200).transform((a) => a.slice(-12)),
+ });
+ 
+ const LANG = { en: "English", pt: "Brazilian Portuguese", es: "Spanish" } as const;
+@@ -20,7 +20,8 @@
+       POST: async ({ request }) => {
+         const parsed = Body.safeParse(await request.json().catch(() => null));
+         if (!parsed.success) return json(400, { error: "invalid" });
+-        const { name, age, lang, messages } = parsed.data;
++        const { name, lang, messages } = parsed.data;
++        const age = parsed.data.age && parsed.data.age >= 5 ? parsed.data.age : undefined; // 0 = idade não informada
+         // Testing phase: no message limits.
+ 
+         const { CHEQUETTO_IDENTITY } = await import("@/lib/chequetto-persona");
+@@ -44,7 +45,7 @@
+           return json(200, { text, engine: "builtin" });
+         } catch (e) {
+           console.error("guest fallback failed", e);
+-          return json(503, { error: "unavailable" });
++          return json(503, { error: "unavailable", hint: "Nenhuma IA respondeu. Confira /api/public/health: cadastre GEMINI_API_KEY, GROQ_API_KEY, MISTRAL_API_KEY ou OPENROUTER_API_KEY no Environment e faça redeploy." });
+         }
+       },
+     },
+--- src/components/FirstContact.tsx	2026-11-23 09:50:00.671611299 +0000
++++ src/components/FirstContact.tsx	2026-11-23 22:26:04.982490094 +0000
+@@ -42,11 +42,12 @@
+     try {
+       const res = await fetch("/api/public/guest-chat", {
+         method: "POST", headers: { "Content-Type": "application/json" },
+-        body: JSON.stringify({ name: n, age: a, lang, messages: history.map(m => ({ role: m.role === "me" ? "user" : "assistant", content: m.text })).slice(-12) }),
++        body: JSON.stringify({ name: n, ...(a >= 5 ? { age: a } : {}), lang, messages: history.map(m => ({ role: m.role === "me" ? "user" : "assistant", content: m.text })).slice(-12) }),
+       });
+       const j = await res.json().catch(() => ({}));
+       if (res.status === 402) return LOCK[lang];
+       if (res.ok && j.text) return j.text as string;
++      if (!res.ok) return `⚠️ Erro ${res.status}: ${j.error ?? "falha"}${j.hint ? ` — ${j.hint}` : ""}`;
+     } catch { /* fall through */ } finally { setBusy(false); }
+     const last = history.filter(m => m.role === "me").at(-1);
+     return last ? soulReply(last.text, (n.split(" ")[0] || "") as string, lang) : t.hello("");
+@@ -74,7 +75,7 @@
+       {burst && <CosmicBurst name="Chequetto" onDone={() => setBurst(false)} />}
+       <header className="flex items-center justify-between py-4">
+         <span className="flex items-center gap-2"><Logo size={30} /><span className="font-display text-2xl">Chequetto</span></span>
+-        <div className="flex items-center gap-1">{(["en", "pt", "es"] as Lang[]).map((l) => <button key={l} type="button" onClick={() => chooseLang(l)} aria-label={l.toUpperCase()} aria-pressed={lang === l} className={`rounded-md px-1.5 py-1 text-lg transition ${lang === l ? "bg-secondary ring-1 ring-gold" : "opacity-60 hover:opacity-100"}`}>{l === "en" ? "🇺🇸" : l === "pt" ? "🇧🇷" : "🇪🇸"}</button>)}<Button variant="ghost" size="icon" aria-label={t.share} onClick={share}><Share2 size={18} /></Button><Button asChild size="sm"><Link to="/auth">{t.save}</Link></Button></div>
++        <div className="flex items-center gap-1">{(["en", "pt", "es"] as Lang[]).map((l) => <button key={l} type="button" onClick={() => chooseLang(l)} aria-label={l.toUpperCase()} aria-pressed={lang === l} className={`rounded-md px-1.5 py-1 text-lg transition ${lang === l ? "bg-secondary ring-1 ring-gold" : "opacity-60 hover:opacity-100"}`}>{l === "en" ? "🇺🇸" : l === "pt" ? "🇧🇷" : "🇪🇸"}</button>)}<Button variant="ghost" size="icon" aria-label={t.share} onClick={share}><Share2 size={18} /></Button><Button asChild size="sm" variant="outline"><Link to="/dashboard">Entrar sem cadastro</Link></Button><Button asChild size="sm"><Link to="/auth">{t.save}</Link></Button></div>
+       </header>
+       <div className="rounded-lg border border-gold/40 bg-card p-4"><p className="flex items-center gap-2 text-xs text-gold"><Sparkles size={14} />{t.pill}</p><p className="mt-2 text-sm">{dailyPill(lang)}</p></div>
+       <div className="flex-1 space-y-4 py-6">

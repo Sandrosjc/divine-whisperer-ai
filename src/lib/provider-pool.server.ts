@@ -57,16 +57,22 @@ export function compress(messages: ChatMsg[], keep = 6, maxChars = 1200): ChatMs
   const sys = messages.filter((m) => m.role === "system");
   const rest = messages.filter((m) => m.role !== "system");
   const recent = rest.slice(-keep).map((m) => ({ ...m, content: m.content.replace(/\s+/g, " ").slice(0, maxChars) }));
+  // Vários provedores recusam (400) quando a conversa começa por "assistant": começa sempre por "user".
+  while (recent.length && recent[0]?.role !== "user") recent.shift();
   const old = rest.slice(0, -keep);
   if (!old.length) return [...sys, ...recent];
   const digest = old.map((m) => `${m.role === "user" ? "U" : "A"}: ${m.content.replace(/\s+/g, " ").slice(0, 80)}`).join(" | ").slice(0, 600);
-  return [...sys, { role: "system", content: `Earlier conversation (summary): ${digest}` }, ...recent];
+  const note = `Earlier conversation (summary): ${digest}`;
+  // Uma única mensagem de sistema (alguns provedores recusam duas).
+  if (sys.length) return [{ role: "system" as const, content: `${sys.map((s) => s.content).join("\n")}\n${note}` }, ...recent];
+  return [{ role: "system" as const, content: note }, ...recent];
 }
 
-export async function poolComplete(messages: ChatMsg[], maxTokens = 400): Promise<{ text: string; provider: string } | null> {
+/** maxChars: limite por mensagem do histórico; use um valor alto em chamadas únicas (resumo de memória, tradução) para não cortar o pedido. */
+export async function poolComplete(messages: ChatMsg[], maxTokens = 400, maxChars = 1200): Promise<{ text: string; provider: string } | null> {
   const slots = loadSlots();
   if (!slots.length) return null;
-  const body = compress(messages);
+  const body = compress(messages, 6, maxChars);
   const start = cursor++ % slots.length;
   for (let i = 0; i < Math.min(slots.length, 12); i++) {
     const s = slots[(start + i) % slots.length] as Slot;
@@ -85,7 +91,7 @@ export async function poolComplete(messages: ChatMsg[], maxTokens = 400): Promis
       if (!res.ok) {
         const n = (strikes.get(id) ?? 0) + 1; strikes.set(id, n);
         const retry = Number(res.headers.get("retry-after")) * 1000;
-        const wait = res.status === 429 ? (retry > 0 ? retry : Math.min(60000 * 2 ** (n - 1), 600000)) : res.status === 401 || res.status === 403 ? 3600000 : 15000;
+        const wait = res.status === 429 ? (retry > 0 ? retry : Math.min(60000 * 2 ** (n - 1), 600000)) : res.status === 401 || res.status === 403 ? 3600000 : res.status === 400 || res.status === 404 ? 300000 : 15000;
         cooldown.set(id, now + wait + Math.random() * 2000);
         console.error("pool slot failed", s.provider.id, res.status);
         continue;

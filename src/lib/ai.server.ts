@@ -86,7 +86,7 @@ export async function resolveEngine(userId: string, plan: string): Promise<Engin
 }
 
 /** Runs a one-shot generation, trying each key in turn; falls back to built-in AI for the pool. */
-export async function completeText(engine: Engine, instructions: string, prompt: string, model?: string): Promise<string> {
+export async function completeText(engine: Engine, instructions: string, prompt: string, model?: string, opts?: { maxTokens?: number }): Promise<string> {
   if (engine.kind === "openrouter") {
     for (const key of engine.keys) {
       try {
@@ -100,7 +100,7 @@ export async function completeText(engine: Engine, instructions: string, prompt:
     if (engine.source === "byok") throw new EngineError("Your OpenRouter key was rejected. Check it in Settings.", 402);
   }
   const { poolComplete } = await import("@/lib/provider-pool.server");
-  const pooled = await poolComplete([{ role: "system", content: instructions }, { role: "user", content: prompt }], 900);
+  const pooled = await poolComplete([{ role: "system", content: instructions }, { role: "user", content: prompt }], opts?.maxTokens ?? 900, 12000);
   if (pooled?.text.trim()) return pooled.text;
   const r = streamText({ model: lovableModel(), instructions, prompt, providerOptions: lovableOptions, maxRetries: 0 });
   return await r.text;
@@ -131,17 +131,22 @@ You are the final refinement stage. Several expert drafts answered the user's la
 ${good.map((d, i) => `--- Draft ${i + 1} ---\n${d.text}`).join("\n\n")}`;
       for (const key of engine.keys) {
         try {
-          const r = streamText({
-            model: openrouterModel(key, engine.refine),
-            instructions: refineInstructions,
-            messages: lastUser ? [lastUser] : messages,
-            maxRetries: 0,
-            onFinish: async ({ text }) => onFinish(text),
-          });
-          return r.toTextStreamResponse();
+          // Sem streaming aqui: assim uma falha do refino não vira resposta vazia e cai na reserva.
+          const r = streamText({ model: openrouterModel(key, engine.refine), instructions: refineInstructions, messages: lastUser ? [lastUser] : messages, maxRetries: 0 });
+          const text = await r.text;
+          if (text.trim()) {
+            await onFinish(text);
+            return new Response(text, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+          }
         } catch (e) {
           console.error("refine failed", e);
         }
+      }
+      // Refino falhou: entrega o melhor rascunho em vez de perder a resposta.
+      const best = good[0];
+      if (best) {
+        await onFinish(best.text);
+        return new Response(best.text, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
       }
     }
     if (engine.source === "byok") throw new EngineError("Your OpenRouter key was rejected. Check it in Settings.", 402);
@@ -149,22 +154,18 @@ ${good.map((d, i) => `--- Draft ${i + 1} ---\n${d.text}`).join("\n\n")}`;
   const { poolComplete } = await import("@/lib/provider-pool.server");
   const pooled = await poolComplete([{ role: "system", content: instructions }, ...messages.map((m) => ({ role: m.role === "assistant" ? ("assistant" as const) : ("user" as const), content: typeof m.content === "string" ? m.content : "" }))], 900);
   if (pooled?.text.trim()) {
-    await onFinish(pooled.text).catch((e) => console.error("finish failed", e));
+    await onFinish(pooled.text);
     return new Response(pooled.text, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
   }
-  // Built-in fallback is buffered so a failure never leaves the chat stuck on an empty reply.
-  let text = "";
-  try {
-    const r = streamText({ model: lovableModel(), instructions, messages, providerOptions: lovableOptions, maxRetries: 0 });
-    text = (await r.text).trim();
-  } catch (e) {
-    console.error("built-in AI failed", e instanceof Error ? e.message : e);
-  }
-  if (text) {
-    await onFinish(text).catch((e) => console.error("finish failed", e));
-    return new Response(text, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
-  }
-  throw new EngineError("BRAIN_BUSY", 503);
+  const r = streamText({
+    model: lovableModel(),
+    instructions,
+    messages,
+    providerOptions: lovableOptions,
+    maxRetries: 0,
+    onFinish: async ({ text }) => onFinish(text),
+  });
+  return r.toTextStreamResponse();
 }
 
 export function persona(p: { full_name?: string | null; birth_date?: string | null; city?: string | null; memory_summary?: string | null }, language: string) {
@@ -190,15 +191,12 @@ export async function compressMemory(engine: Engine, userId: string) {
   if (!rows || rows.length <= 16) return;
   const older = rows.slice(0, rows.length - 6);
   const { data: prof } = await supabaseAdmin.from("profiles").select("memory_summary").eq("id", userId).single();
-  const transcript = older.map((m) => `${m.role}: ${m.content.slice(0, 2000)}`).join("\n");
-  const { poolComplete } = await import("@/lib/provider-pool.server");
-  const r = await poolComplete([
-    { role: "system", content: "You compress conversation memory. Output an ultra-compact bullet list (max 180 words) of durable facts, preferences, goals, emotions, open threads and decisions about the user. Merge with existing memory, drop redundancy. No preamble." },
-    { role: "user", content: `Existing memory:\n${prof?.memory_summary || "(none)"}\n\nNew conversation to fold in:\n${transcript.slice(-12000)}` },
-  ], 400).catch(() => null);
-  // No free key answered: skip quietly, the chat keeps working and we retry later.
-  if (!r?.text.trim()) return;
-  const summary = r.text;
+  const transcript = older.map((m) => `${m.role}: ${m.content.slice(0, 2000)}`).join("\n").slice(-10000);
+  const summary = await completeText(
+    engine,
+    "You compress conversation memory. Output an ultra-compact bullet list (max 180 words) of durable facts, preferences, goals, emotions, open threads and decisions about the user. Merge with existing memory, drop redundancy. No preamble.",
+    `Existing memory:\n${prof?.memory_summary || "(none)"}\n\nNew conversation to fold in:\n${transcript}`,
+  );
   await supabaseAdmin.from("profiles").update({ memory_summary: summary.trim() }).eq("id", userId);
   await supabaseAdmin.from("chat_messages").update({ summarized: true }).in("id", older.map((m) => m.id));
 }

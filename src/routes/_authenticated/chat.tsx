@@ -40,18 +40,12 @@ function speak(text: string, lang: string) {
   window.speechSynthesis.speak(u);
 }
 
-function busyText(lang: string) {
-  if (lang.startsWith("pt")) return "Ops, meu cérebro deu uma piscadinha agora 😅 Manda de novo que eu respondo!";
-  if (lang.startsWith("es")) return "Uy, mi cerebro parpadeó un momento 😅 ¡Envíalo otra vez!";
-  return "Oops, my brain blinked for a second 😅 Send it again and I'll answer!";
-}
-
 function Chat() {
   const { t, lang } = useI18n();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const me = useQuery({ queryKey: ["me"], queryFn: useServerFn(getMe) });
-  const history = useQuery({ queryKey: ["history"], queryFn: useServerFn(getHistory) });
+  const history = useQuery({ queryKey: ["history"], queryFn: useServerFn(getHistory), refetchOnWindowFocus: false });
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -94,7 +88,7 @@ function Chat() {
       });
       if (!res.ok || !res.body) {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
-        const msg = err.error === "TRIAL_ENDED" ? t("trialEnded") : err.error === "NEEDS_BYOK" ? t("needsKey") : busyText(lang);
+        const msg = err.error === "TRIAL_ENDED" ? t("trialEnded") : err.error === "NEEDS_BYOK" ? t("needsKey") : err.error ?? "Error";
         setMsgs((m) => m.map((x) => (x.id === aid ? { ...x, content: `> ${msg}` } : x)));
         return;
       }
@@ -107,11 +101,10 @@ function Chat() {
         full += dec.decode(value, { stream: true });
         setMsgs((m) => m.map((x) => (x.id === aid ? { ...x, content: full } : x)));
       }
-      if (!full.trim()) setMsgs((m) => m.map((x) => (x.id === aid ? { ...x, content: busyText(lang) } : x)));
+      if (!full.trim()) setMsgs((m) => m.map((x) => (x.id === aid ? { ...x, content: `> A IA não devolveu resposta. Tente de novo.` } : x)));
       if (voice && full) speak(full, lang);
       qc.invalidateQueries({ queryKey: ["me"] });
     } catch (e) {
-      setMsgs((m) => m.map((x) => (x.id === aid && !x.content ? { ...x, content: busyText(lang) } : x)));
       toast.error(e instanceof Error ? e.message : "Network error");
     } finally {
       setBusy(false);

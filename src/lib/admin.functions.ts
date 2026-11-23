@@ -28,8 +28,8 @@ export const getAdminData = createServerFn({ method: "GET" })
     return {
       settings: settings && {
         ...settings,
-        openrouter_keys: settings.openrouter_keys.map((k: string) => (k ? `${k.slice(0, 8)}…${k.slice(-4)}` : "")),
-        key_count: settings.openrouter_keys.filter(Boolean).length,
+        openrouter_keys: (settings.openrouter_keys ?? []).map((k: string) => (k ? `${k.slice(0, 8)}…${k.slice(-4)}` : "")),
+        key_count: (settings.openrouter_keys ?? []).filter(Boolean).length,
       },
       users: users ?? [],
       licenses: licenses ?? [],

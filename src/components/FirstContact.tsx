@@ -42,7 +42,7 @@ export function FirstContact() {
     try {
       const res = await fetch("/api/public/guest-chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: n, age: a, lang, messages: history.map(m => ({ role: m.role === "me" ? "user" : "assistant", content: m.text })).slice(-12) }),
+        body: JSON.stringify({ name: n, ...(a >= 5 ? { age: a } : {}), lang, messages: history.map(m => ({ role: m.role === "me" ? "user" : "assistant", content: m.text })).slice(-12) }),
       });
       const j = await res.json().catch(() => ({}));
       if (res.status === 402) return LOCK[lang];
