@@ -25,7 +25,12 @@ export const Route = createFileRoute("/api/chat")({
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const ai = await import("@/lib/ai.server");
         const userId = u.user.id;
-        const { data: profile } = await supabaseAdmin.from("profiles").select("*").eq("id", userId).single();
+        let { data: profile } = await supabaseAdmin.from("profiles").select("*").eq("id", userId).maybeSingle();
+        if (!profile) {
+          // Modo aberto: cria o perfil na hora se o gatilho do banco não rodou.
+          await supabaseAdmin.from("profiles").upsert({ id: userId, email: u.user.email ?? null, onboarded: true }, { onConflict: "id" });
+          profile = (await supabaseAdmin.from("profiles").select("*").eq("id", userId).maybeSingle()).data;
+        }
         if (!profile) return json(404, "Profile missing");
 
         let engine;
@@ -71,7 +76,7 @@ export const Route = createFileRoute("/api/chat")({
           return await ai.streamAnswer(engine, instructions, messages, async (text) => {
             const { error } = await supabaseAdmin.from("chat_messages").insert({ user_id: userId, role: "assistant", content: text });
             if (error) console.error("save assistant failed", error);
-            void ai.compressMemory(engine, userId).catch((e) => console.error("compress failed", e));
+            await ai.compressMemory(engine, userId).catch((e) => console.error("compress failed", e));
           });
         } catch (e) {
           if (e instanceof ai.EngineError) return json(e.status, e.message);

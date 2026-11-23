@@ -21,6 +21,7 @@ import { Route as AuthenticatedSanctumRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ApiPublicGuestChatRouteImport } from './routes/api/public/guest-chat'
+import { Route as ApiPublicHealthRouteImport } from './routes/api/public/health'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -81,6 +82,11 @@ const ApiPublicGuestChatRoute = ApiPublicGuestChatRouteImport.update({
   path: '/api/public/guest-chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHealthRoute = ApiPublicHealthRouteImport.update({
+  id: '/api/public/health',
+  path: '/api/public/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -94,6 +100,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/api/chat': typeof ApiChatRoute
   '/api/public/guest-chat': typeof ApiPublicGuestChatRoute
+  '/api/public/health': typeof ApiPublicHealthRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -107,6 +114,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/api/chat': typeof ApiChatRoute
   '/api/public/guest-chat': typeof ApiPublicGuestChatRoute
+  '/api/public/health': typeof ApiPublicHealthRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -122,6 +130,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/api/chat': typeof ApiChatRoute
   '/api/public/guest-chat': typeof ApiPublicGuestChatRoute
+  '/api/public/health': typeof ApiPublicHealthRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -137,6 +146,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/api/chat'
     | '/api/public/guest-chat'
+    | '/api/public/health'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -150,6 +160,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/api/chat'
     | '/api/public/guest-chat'
+    | '/api/public/health'
   id:
     | '__root__'
     | '/'
@@ -164,6 +175,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/api/chat'
     | '/api/public/guest-chat'
+    | '/api/public/health'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -174,6 +186,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   ApiChatRoute: typeof ApiChatRoute
   ApiPublicGuestChatRoute: typeof ApiPublicGuestChatRoute
+  ApiPublicHealthRoute: typeof ApiPublicHealthRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -262,6 +275,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicGuestChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/health': {
+      id: '/api/public/health'
+      path: '/api/public/health'
+      fullPath: '/api/public/health'
+      preLoaderRoute: typeof ApiPublicHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -292,6 +312,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   ApiChatRoute: ApiChatRoute,
   ApiPublicGuestChatRoute: ApiPublicGuestChatRoute,
+  ApiPublicHealthRoute: ApiPublicHealthRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -44,7 +44,7 @@ export const Route = createFileRoute("/api/public/guest-chat")({
           return json(200, { text, engine: "builtin" });
         } catch (e) {
           console.error("guest fallback failed", e);
-          return json(503, { error: "unavailable" });
+          return json(503, { error: "unavailable", hint: "Nenhuma IA respondeu. Confira /api/public/health: cadastre GEMINI_API_KEY, GROQ_API_KEY, MISTRAL_API_KEY ou OPENROUTER_API_KEY no Environment e faça redeploy." });
         }
       },
     },
