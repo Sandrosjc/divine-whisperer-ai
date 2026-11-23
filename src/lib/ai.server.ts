@@ -152,15 +152,19 @@ ${good.map((d, i) => `--- Draft ${i + 1} ---\n${d.text}`).join("\n\n")}`;
     await onFinish(pooled.text).catch((e) => console.error("finish failed", e));
     return new Response(pooled.text, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
   }
-  const r = streamText({
-    model: lovableModel(),
-    instructions,
-    messages,
-    providerOptions: lovableOptions,
-    maxRetries: 0,
-    onFinish: async ({ text }) => onFinish(text),
-  });
-  return r.toTextStreamResponse();
+  // Built-in fallback is buffered so a failure never leaves the chat stuck on an empty reply.
+  let text = "";
+  try {
+    const r = streamText({ model: lovableModel(), instructions, messages, providerOptions: lovableOptions, maxRetries: 0 });
+    text = (await r.text).trim();
+  } catch (e) {
+    console.error("built-in AI failed", e instanceof Error ? e.message : e);
+  }
+  if (text) {
+    await onFinish(text).catch((e) => console.error("finish failed", e));
+    return new Response(text, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  }
+  throw new EngineError("BRAIN_BUSY", 503);
 }
 
 export function persona(p: { full_name?: string | null; birth_date?: string | null; city?: string | null; memory_summary?: string | null }, language: string) {
