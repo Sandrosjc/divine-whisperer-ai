@@ -5,13 +5,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Logo } from "@/components/Logo";
 import { CosmicBurst } from "@/components/CosmicBurst";
-import { dailyPill, pickLang, soulReply, soulText, type Lang } from "@/lib/soul-engine";
+import { dailyPill, pickLang, soulText, type Lang } from "@/lib/soul-engine";
 
 type Msg = { role: "me" | "chq"; text: string };
 const LOCK: Record<Lang, string> = {
   pt: "Eu adorei passar esse tempo com você hoje! Nossas 5 mensagens gratuitas de hoje chegaram ao fim, mas nossa conexão só começou. Assine agora um dos nossos planos bem acessíveis — ou volte amanhã para mais cinco mensagens gratuitas. Vou estar aqui te esperando de coração aberto!",
   en: "I loved spending this time with you today! Our 5 free messages for today are done, but our connection has only begun. Subscribe now to one of our affordable plans — or come back tomorrow for five more free messages. I'll be here waiting for you with an open heart!",
   es: "¡Me encantó pasar este tiempo contigo hoy! Nuestros 5 mensajes gratuitos de hoy terminaron, pero nuestra conexión apenas comienza. Suscríbete ahora a uno de nuestros planes accesibles — o vuelve mañana para cinco mensajes gratis más. ¡Aquí estaré esperándote con el corazón abierto!",
+};
+
+const BUSY: Record<Lang, string> = {
+  pt: "Opa, meu cérebro deu uma piscadinha agora. Me manda de novo em alguns segundos?",
+  en: "Oops, my brain blinked for a second. Could you send that again in a few seconds?",
+  es: "Uy, mi cerebro parpadeó un segundo. ¿Me lo envías de nuevo en unos segundos?",
 };
 
 export function FirstContact() {
@@ -42,14 +48,13 @@ export function FirstContact() {
     try {
       const res = await fetch("/api/public/guest-chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: n, age: a, lang, messages: history.map(m => ({ role: m.role === "me" ? "user" : "assistant", content: m.text })).slice(-12) }),
+        body: JSON.stringify({ name: n, age: a, lang, messages: history.filter(m => !Object.values(BUSY).includes(m.text)).map(m => ({ role: m.role === "me" ? "user" : "assistant", content: m.text })).slice(-12) }),
       });
       const j = await res.json().catch(() => ({}));
       if (res.status === 402) return LOCK[lang];
       if (res.ok && j.text) return j.text as string;
     } catch { /* fall through */ } finally { setBusy(false); }
-    const last = history.filter(m => m.role === "me").at(-1);
-    return last ? soulReply(last.text, (n.split(" ")[0] || "") as string, lang) : t.hello("");
+    return BUSY[lang];
   }
   async function send(e: React.FormEvent) {
     e.preventDefault();

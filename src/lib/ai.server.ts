@@ -149,7 +149,7 @@ ${good.map((d, i) => `--- Draft ${i + 1} ---\n${d.text}`).join("\n\n")}`;
   const { poolComplete } = await import("@/lib/provider-pool.server");
   const pooled = await poolComplete([{ role: "system", content: instructions }, ...messages.map((m) => ({ role: m.role === "assistant" ? ("assistant" as const) : ("user" as const), content: typeof m.content === "string" ? m.content : "" }))], 900);
   if (pooled?.text.trim()) {
-    await onFinish(pooled.text);
+    await onFinish(pooled.text).catch((e) => console.error("finish failed", e));
     return new Response(pooled.text, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
   }
   const r = streamText({
@@ -187,11 +187,14 @@ export async function compressMemory(engine: Engine, userId: string) {
   const older = rows.slice(0, rows.length - 6);
   const { data: prof } = await supabaseAdmin.from("profiles").select("memory_summary").eq("id", userId).single();
   const transcript = older.map((m) => `${m.role}: ${m.content.slice(0, 2000)}`).join("\n");
-  const summary = await completeText(
-    engine,
-    "You compress conversation memory. Output an ultra-compact bullet list (max 180 words) of durable facts, preferences, goals, emotions, open threads and decisions about the user. Merge with existing memory, drop redundancy. No preamble.",
-    `Existing memory:\n${prof?.memory_summary || "(none)"}\n\nNew conversation to fold in:\n${transcript}`,
-  );
+  const { poolComplete } = await import("@/lib/provider-pool.server");
+  const r = await poolComplete([
+    { role: "system", content: "You compress conversation memory. Output an ultra-compact bullet list (max 180 words) of durable facts, preferences, goals, emotions, open threads and decisions about the user. Merge with existing memory, drop redundancy. No preamble." },
+    { role: "user", content: `Existing memory:\n${prof?.memory_summary || "(none)"}\n\nNew conversation to fold in:\n${transcript.slice(-12000)}` },
+  ], 400).catch(() => null);
+  // No free key answered: skip quietly, the chat keeps working and we retry later.
+  if (!r?.text.trim()) return;
+  const summary = r.text;
   await supabaseAdmin.from("profiles").update({ memory_summary: summary.trim() }).eq("id", userId);
   await supabaseAdmin.from("chat_messages").update({ summarized: true }).in("id", older.map((m) => m.id));
 }

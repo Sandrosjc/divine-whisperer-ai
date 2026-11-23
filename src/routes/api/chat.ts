@@ -71,7 +71,7 @@ export const Route = createFileRoute("/api/chat")({
           return await ai.streamAnswer(engine, instructions, messages, async (text) => {
             const { error } = await supabaseAdmin.from("chat_messages").insert({ user_id: userId, role: "assistant", content: text });
             if (error) console.error("save assistant failed", error);
-            await ai.compressMemory(engine, userId).catch((e) => console.error("compress failed", e));
+            void ai.compressMemory(engine, userId).catch((e) => console.error("compress failed", e));
           });
         } catch (e) {
           if (e instanceof ai.EngineError) return json(e.status, e.message);

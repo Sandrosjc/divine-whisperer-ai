@@ -8,7 +8,7 @@
 type Provider = { id: string; match: RegExp; url: string; model: string; headers?: Record<string, string> };
 
 const PROVIDERS: Provider[] = [
-  { id: "gemini", match: /^GEMINI_API(_KEYS?)?(_\d+)?$/, url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", model: "gemini-2.0-flash" },
+  { id: "gemini", match: /^GEMINI_API(_KEYS?)?(_\d+)?$/, url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", model: "gemini-2.5-flash" },
   { id: "mistral", match: /^MISTRAL_API(_KEYS?)?(_\d+)?$/, url: "https://api.mistral.ai/v1/chat/completions", model: "mistral-small-latest" },
   { id: "groq", match: /^GROQ_API(_KEYS?)?(_\d+)?$/, url: "https://api.groq.com/openai/v1/chat/completions", model: "llama-3.3-70b-versatile" },
   { id: "grok", match: /^(GROK|XAI)_API(_KEYS?)?(_\d+)?$/, url: "https://api.x.ai/v1/chat/completions", model: "grok-3-mini" },
@@ -63,14 +63,15 @@ export async function poolComplete(messages: ChatMsg[], maxTokens = 400): Promis
   if (!slots.length) return null;
   const body = compress(messages);
   const start = cursor++ % slots.length;
-  for (let i = 0; i < Math.min(slots.length, 12); i++) {
+  const deadline = Date.now() + 25000;
+  for (let i = 0; i < Math.min(slots.length, 12) && Date.now() < deadline; i++) {
     const s = slots[(start + i) % slots.length] as Slot;
     const id = `${s.provider.id}:${s.key.slice(-6)}`;
     const now = Date.now();
     if ((cooldown.get(id) ?? 0) > now) continue;
     try {
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 15000);
+      const timer = setTimeout(() => ctrl.abort(), 9000);
       const res = await fetch(s.provider.url, {
         method: "POST", signal: ctrl.signal,
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.key}`, ...s.provider.headers },
