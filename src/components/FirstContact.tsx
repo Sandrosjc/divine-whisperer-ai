@@ -42,12 +42,11 @@ export function FirstContact() {
     try {
       const res = await fetch("/api/public/guest-chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: n, ...(a >= 5 ? { age: a } : {}), lang, messages: history.map(m => ({ role: m.role === "me" ? "user" : "assistant", content: m.text })).slice(-12) }),
+        body: JSON.stringify({ name: n, age: a, lang, messages: history.map(m => ({ role: m.role === "me" ? "user" : "assistant", content: m.text })).slice(-12) }),
       });
       const j = await res.json().catch(() => ({}));
       if (res.status === 402) return LOCK[lang];
       if (res.ok && j.text) return j.text as string;
-      if (!res.ok) return `⚠️ Erro ${res.status}: ${j.error ?? "falha"}${j.hint ? ` — ${j.hint}` : ""}`;
     } catch { /* fall through */ } finally { setBusy(false); }
     const last = history.filter(m => m.role === "me").at(-1);
     return last ? soulReply(last.text, (n.split(" ")[0] || "") as string, lang) : t.hello("");
@@ -75,7 +74,7 @@ export function FirstContact() {
       {burst && <CosmicBurst name="Chequetto" onDone={() => setBurst(false)} />}
       <header className="flex items-center justify-between py-4">
         <span className="flex items-center gap-2"><Logo size={30} /><span className="font-display text-2xl">Chequetto</span></span>
-        <div className="flex items-center gap-1">{(["en", "pt", "es"] as Lang[]).map((l) => <button key={l} type="button" onClick={() => chooseLang(l)} aria-label={l.toUpperCase()} aria-pressed={lang === l} className={`rounded-md px-1.5 py-1 text-lg transition ${lang === l ? "bg-secondary ring-1 ring-gold" : "opacity-60 hover:opacity-100"}`}>{l === "en" ? "🇺🇸" : l === "pt" ? "🇧🇷" : "🇪🇸"}</button>)}<Button variant="ghost" size="icon" aria-label={t.share} onClick={share}><Share2 size={18} /></Button><Button asChild size="sm" variant="outline"><Link to="/dashboard">Entrar sem cadastro</Link></Button><Button asChild size="sm"><Link to="/auth">{t.save}</Link></Button></div>
+        <div className="flex items-center gap-1">{(["en", "pt", "es"] as Lang[]).map((l) => <button key={l} type="button" onClick={() => chooseLang(l)} aria-label={l.toUpperCase()} aria-pressed={lang === l} className={`rounded-md px-1.5 py-1 text-lg transition ${lang === l ? "bg-secondary ring-1 ring-gold" : "opacity-60 hover:opacity-100"}`}>{l === "en" ? "🇺🇸" : l === "pt" ? "🇧🇷" : "🇪🇸"}</button>)}<Button variant="ghost" size="icon" aria-label={t.share} onClick={share}><Share2 size={18} /></Button><Button asChild size="sm"><Link to="/auth">{t.save}</Link></Button></div>
       </header>
       <div className="rounded-lg border border-gold/40 bg-card p-4"><p className="flex items-center gap-2 text-xs text-gold"><Sparkles size={14} />{t.pill}</p><p className="mt-2 text-sm">{dailyPill(lang)}</p></div>
       <div className="flex-1 space-y-4 py-6">

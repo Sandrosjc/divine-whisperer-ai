@@ -45,7 +45,7 @@ function Chat() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const me = useQuery({ queryKey: ["me"], queryFn: useServerFn(getMe) });
-  const history = useQuery({ queryKey: ["history"], queryFn: useServerFn(getHistory), refetchOnWindowFocus: false });
+  const history = useQuery({ queryKey: ["history"], queryFn: useServerFn(getHistory) });
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -101,7 +101,6 @@ function Chat() {
         full += dec.decode(value, { stream: true });
         setMsgs((m) => m.map((x) => (x.id === aid ? { ...x, content: full } : x)));
       }
-      if (!full.trim()) setMsgs((m) => m.map((x) => (x.id === aid ? { ...x, content: `> A IA não devolveu resposta. Tente de novo.` } : x)));
       if (voice && full) speak(full, lang);
       qc.invalidateQueries({ queryKey: ["me"] });
     } catch (e) {

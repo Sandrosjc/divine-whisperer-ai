@@ -65,3 +65,59 @@ test("poolComplete does not cut a long single request when maxChars is raised", 
     delete process.env["MISTRAL_API_KEY"];
   }
 });
+
+test("cleanKey and parseKeys handle pasted formats", async () => {
+  const { cleanKey, parseKeys, keysFor } = await import("./provider-pool.server");
+  expect(cleanKey('"AIzaSyABCDEFGHIJKL"')).toBe("AIzaSyABCDEFGHIJKL");
+  expect(cleanKey("GEMINI_API_KEY=AIzaSyABCDEFGHIJKL")).toBe("AIzaSyABCDEFGHIJKL");
+  expect(cleanKey("Bearer gsk_abcdefghijklmnop")).toBe("gsk_abcdefghijklmnop");
+  expect(cleanKey("abcdefghijklmnopqrstuvwx==")).toBe("abcdefghijklmnopqrstuvwx==");
+  expect(parseKeys("k1_aaaaaaaaaaaa, 'k2_bbbbbbbbbbbb'")).toEqual(["k1_aaaaaaaaaaaa", "k2_bbbbbbbbbbbb"]);
+  const names = {
+    GEMINI_API_KEY: "g1_aaaaaaaaaaaa", GOOGLE_API_KEY: "g2_aaaaaaaaaaaa", GEMINI_KEY_2: "g3_aaaaaaaaaaaa",
+    GROQ_KEY: "q1_aaaaaaaaaaaa", MISTRAL_KEY: "m1_aaaaaaaaaaaa", OPENROUTER_KEY: "o1_aaaaaaaaaaaa", GOOGLE_DRIVE_CLIENT_ID: "nao_entra_aaaaaaaa",
+  };
+  const providersMod = await import("./provider-pool.server");
+  const rep = providersMod.providerReport; void rep;
+  const env = names as Record<string, string>;
+  // usa o relatório com um env simulado
+  const saved = { ...process.env };
+  Object.assign(process.env, env);
+  try {
+    const r = providersMod.providerReport();
+    const by = Object.fromEntries(r.map((x) => [x.provider, x.keys]));
+    expect(by["gemini"]).toBe(3);
+    expect(by["groq"]).toBe(1);
+    expect(by["mistral"]).toBe(1);
+    expect(by["openrouter"]).toBe(1);
+  } finally {
+    for (const k of Object.keys(env)) delete process.env[k];
+    Object.assign(process.env, saved);
+  }
+  void keysFor;
+});
+
+test("pool switches to the next model when the provider says the model is gone, and remembers it", async () => {
+  const { poolComplete } = await import("./provider-pool.server");
+  process.env["GROQ_API_KEY"] = "gsk_modeltesttesttest";
+  const seen: string[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (_u: unknown, init?: { body?: string }) => {
+    const model = JSON.parse(init?.body ?? "{}").model as string;
+    seen.push(model);
+    if (model === "openai/gpt-oss-120b") return new Response('{"error":{"message":"The model does not exist"}}', { status: 404 });
+    return new Response(JSON.stringify({ choices: [{ message: { content: "ok:" + model } }] }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const r1 = await poolComplete([{ role: "system", content: "s" }, { role: "user", content: "oi" }]);
+    expect(r1?.text).toBe("ok:openai/gpt-oss-20b");
+    expect(seen).toEqual(["openai/gpt-oss-120b", "openai/gpt-oss-20b"]);
+    seen.length = 0;
+    const r2 = await poolComplete([{ role: "system", content: "s" }, { role: "user", content: "oi de novo" }]);
+    expect(r2?.text).toBe("ok:openai/gpt-oss-20b");
+    expect(seen).toEqual(["openai/gpt-oss-20b"]);
+  } finally {
+    globalThis.fetch = realFetch;
+    delete process.env["GROQ_API_KEY"];
+  }
+});

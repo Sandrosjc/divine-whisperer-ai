@@ -45,7 +45,9 @@ export const Route = createFileRoute("/api/public/guest-chat")({
           return json(200, { text, engine: "builtin" });
         } catch (e) {
           console.error("guest fallback failed", e);
-          return json(503, { error: "unavailable", hint: "Nenhuma IA respondeu. Confira /api/public/health: cadastre GEMINI_API_KEY, GROQ_API_KEY, MISTRAL_API_KEY ou OPENROUTER_API_KEY no Environment e faça redeploy." });
+          const { providerReport } = await import("@/lib/provider-pool.server");
+        const falhas = providerReport().filter((p) => p.keys > 0).map((p) => `${p.provider}: ${p.ultimo_erro ? `erro ${p.ultimo_erro.status}` : "sem resposta"}`).join("; ");
+        return json(503, { error: "unavailable", hint: falhas ? `Chaves encontradas, mas nenhuma IA respondeu (${falhas}). Abra /api/public/health?testar=1 para ver o motivo exato.` : "Nenhuma chave de IA encontrada. Cadastre GEMINI_API_KEY, GROQ_API_KEY, MISTRAL_API_KEY ou OPENROUTER_API_KEY no Environment e faça redeploy. Veja /api/public/health." });
         }
       },
     },
