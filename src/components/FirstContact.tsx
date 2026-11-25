@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Logo } from "@/components/Logo";
 import { CosmicBurst } from "@/components/CosmicBurst";
+import { ShareActions } from "@/components/ShareActions";
 import { dailyPill, pickLang, soulReply, soulText, type Lang } from "@/lib/soul-engine";
 
 type Msg = { role: "me" | "chq"; text: string };
@@ -85,7 +86,7 @@ export function FirstContact() {
             <p className="mt-3 text-sm text-muted-foreground">{t.say}</p>
           </div>
         )}
-        {msgs.map((m, i) => <div key={i} className={m.role === "me" ? "ms-auto max-w-[85%] rounded-lg bg-secondary px-4 py-3 text-sm" : "max-w-[90%] text-sm leading-7"}>{m.text}</div>)}
+        {msgs.map((m, i) => <div key={i} className={m.role === "me" ? "ms-auto max-w-[85%] rounded-lg bg-secondary px-4 py-3 text-sm" : "max-w-[90%] text-sm leading-7"}>{m.text}{m.role === "chq" && <ShareActions text={m.text} />}</div>)}
         {busy && <div className="flex gap-1 text-gold" aria-label="…"><span className="animate-pulse">✦</span><span className="animate-pulse [animation-delay:150ms]">✦</span><span className="animate-pulse [animation-delay:300ms]">✦</span></div>}
         <div ref={end} />
       </div>

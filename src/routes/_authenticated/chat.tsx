@@ -9,6 +9,7 @@ import { getHistory, getMe } from "@/lib/app.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
 import { Logo } from "@/components/Logo";
+import { ShareActions } from "@/components/ShareActions";
 import { LanguageSelect } from "@/components/LanguageSelect";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -156,7 +157,7 @@ function Chat() {
               <div key={m.id} className="flex gap-3">
                 <div className="mt-1 shrink-0"><Logo size={26} /></div>
                 <div className="prose-chq min-w-0 flex-1">
-                  {m.content ? <ReactMarkdown>{m.content}</ReactMarkdown> : <p className="animate-pulse text-muted-foreground">{t("thinking")}</p>}
+                  {m.content ? <><ReactMarkdown>{m.content}</ReactMarkdown>{!busy && <ShareActions text={m.content} />}</> : <p className="animate-pulse text-muted-foreground">{t("thinking")}</p>}
                 </div>
               </div>
             ),
