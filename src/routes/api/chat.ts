@@ -1,8 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import type { Database } from "@/integrations/supabase/types";
+import { authUser, insertRow, rpc, selectRows, upsertRow } from "@/server/supabase-rest";
 
 const Body = z.object({ message: z.string().min(1).max(8000), language: z.string().max(20) });
+
+type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+
+/** Plano gratuito: 10 mensagens por dia, renovadas à meia-noite UTC. */
+const DAY_LIMIT = 10;
 
 function json(status: number, error: string) {
   return new Response(JSON.stringify({ error }), { status, headers: { "Content-Type": "application/json" } });
@@ -14,45 +20,54 @@ export const Route = createFileRoute("/api/chat")({
       POST: async ({ request }) => {
         const token = request.headers.get("authorization")?.replace("Bearer ", "");
         if (!token) return json(401, "Unauthorized");
-        const anon = createClient(process.env["SUPABASE_URL"]!, process.env["SUPABASE_PUBLISHABLE_KEY"]!, {
-          auth: { persistSession: false, autoRefreshToken: false },
-        });
-        const { data: u } = await anon.auth.getUser(token);
-        if (!u.user) return json(401, "Unauthorized");
+        const u = await authUser(token);
+        if (!u) return json(401, "Unauthorized");
         const parsed = Body.safeParse(await request.json().catch(() => null));
         if (!parsed.success) return json(400, "Invalid message");
 
-        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const ai = await import("@/lib/ai.server");
-        const userId = u.user.id;
-        let { data: profile } = await supabaseAdmin.from("profiles").select("*").eq("id", userId).maybeSingle();
+        const userId = u.id;
+
+        const readProfile = async () => {
+          const rows = await selectRows<Profile[]>(`profiles?id=eq.${userId}&select=*`, token);
+          return rows?.[0] ?? null;
+        };
+        let profile = await readProfile();
         if (!profile) {
           // Modo aberto: cria o perfil na hora se o gatilho do banco não rodou.
-          await supabaseAdmin.from("profiles").upsert({ id: userId, email: u.user.email ?? null, onboarded: true }, { onConflict: "id" });
-          profile = (await supabaseAdmin.from("profiles").select("*").eq("id", userId).maybeSingle()).data;
+          await upsertRow("profiles", { id: userId, email: u.email ?? null, onboarded: true }, token);
+          profile = await readProfile();
         }
         if (!profile) return json(404, "Profile missing");
 
-        let engine;
+        // Cota diária atômica no banco: a RPC conta o dia (UTC), grava a mensagem
+        // do usuário e devolve o plano. Sem service role e imune a apagar histórico.
+        const quota = await rpc<Array<{ allowed: boolean; used: number; plan: string }>>(
+          "consume_chat_message",
+          { _content: parsed.data.message, _limit: DAY_LIMIT },
+          token,
+        );
+        const result = quota?.[0];
+        if (result?.plan === "suspended") return json(403, "Your account is suspended.");
+        if (!result?.allowed) return json(402, "DAILY_LIMIT");
+        const freePlan = result.plan !== "lifetime";
+        const remaining = freePlan ? Math.max(0, DAY_LIMIT - result.used) : -1;
+
+        let engine: Awaited<ReturnType<typeof ai.resolveEngine>>;
         try {
           engine = await ai.resolveEngine(userId, profile.plan);
         } catch (e) {
           if (e instanceof ai.EngineError) return json(e.status, e.message);
-          throw e;
+          // Rotação de chaves/BYOK dependem da service role; sem ela seguimos no pool.
+          console.error("resolveEngine indisponível, usando IA padrão:", e);
+          engine = { kind: "lovable" };
         }
 
-        const { error: insErr } = await supabaseAdmin
-          .from("chat_messages")
-          .insert({ user_id: userId, role: "user", content: parsed.data.message });
-        if (insErr) return json(500, "Could not save message");
-
-        const { data: recent } = await supabaseAdmin
-          .from("chat_messages")
-          .select("role, content")
-          .eq("user_id", userId)
-          .eq("summarized", false)
-          .order("created_at", { ascending: false })
-          .limit(16);
+        // A mensagem do usuário já foi gravada pela RPC da cota.
+        const recent = await selectRows<Array<{ role: string; content: string }> | null>(
+          `chat_messages?user_id=eq.${userId}&summarized=eq.false&select=role,content&order=created_at.desc&limit=16`,
+          token,
+        );
         const messages = (recent ?? []).reverse().map((m) => ({
           role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
           content: m.content,
@@ -74,11 +89,20 @@ export const Route = createFileRoute("/api/chat")({
           const instructions = context
             ? `${base}\n\nPublic facts and web search results (use only if relevant; cite source URLs briefly):\n${context}`
             : base;
-          return await ai.streamAnswer(engine, instructions, messages, async (text) => {
-            const { error } = await supabaseAdmin.from("chat_messages").insert({ user_id: userId, role: "assistant", content: text });
-            if (error) console.error("save assistant failed", error);
+          const answer = await ai.streamAnswer(engine, instructions, messages, async (text) => {
+            try {
+              await insertRow("chat_messages", { user_id: userId, role: "assistant", content: text }, token);
+            } catch (error) {
+              console.error("save assistant failed", error);
+            }
             await ai.compressMemory(engine, userId).catch((e) => console.error("compress failed", e));
           });
+          if (remaining < 0) return answer;
+          // Avisa a cota restante do dia sem alterar o corpo da resposta.
+          const headers = new Headers(answer.headers);
+          headers.set("X-Chequetto-Remaining", String(remaining));
+          headers.set("X-Chequetto-Daily-Limit", String(DAY_LIMIT));
+          return new Response(answer.body, { status: answer.status, headers });
         } catch (e) {
           if (e instanceof ai.EngineError) return json(e.status, e.message);
           console.error(e);
